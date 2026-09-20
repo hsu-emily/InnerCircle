@@ -3,7 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- allowBackup is off on purpose: the app stores an OpenAI key and an Instagram session. -->
+    <!-- allowBackup is off on purpose: the app stores a logged-in Instagram session and your usage history. -->
     <application
         android:name=".InnerCircleApp"
         android:allowBackup="false"

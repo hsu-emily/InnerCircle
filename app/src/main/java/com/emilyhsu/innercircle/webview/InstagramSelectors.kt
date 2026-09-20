@@ -85,6 +85,29 @@ object InstagramSelectors {
             hideClosest = "article",
             keepLayoutBox = true,
         ),
+
+        // Once you've seen everything new, Instagram prints "You're all caught up" and then carries on
+        // with a "Suggested Posts" section. Those posts have no label at all (just a Follow button), so
+        // the rules above can't see them, and hiding them one by one makes Instagram keep loading more
+        // forever (measured: 18 requests in 9 seconds and the page growing from 15 to 87 posts). So this
+        // block is treated as the END of the feed: everything after it is made invisible but left in
+        // place, and the page can't be scrolled past it. See `endOfFeed` in assets/feed_cleaner.js.
+        // FRAGILE: the marker's wording (English) and that it is a <span> in the feed column.
+        TextRule(
+            name = "endOfFeed",
+            textSelector = "span",
+            texts = listOf("You're all caught up", "You\u2019re all caught up"),
+            hideClosest = "span",
+            endOfFeed = true,
+        ),
+
+        // The "Suggested Posts" heading inside that same block.
+        TextRule(
+            name = "suggestedPostsHeading",
+            textSelector = "span",
+            texts = listOf("Suggested Posts"),
+            hideClosest = "span",
+        ),
     )
 
     /**
@@ -182,6 +205,8 @@ data class TextRule(
     val texts: List<String>,
     val hideClosest: String,
     val keepLayoutBox: Boolean = false,
+    /** Not hidden: marks the end of the feed. Everything after it is hidden and scrolling stops there. */
+    val endOfFeed: Boolean = false,
 )
 
 /**

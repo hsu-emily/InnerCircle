@@ -86,7 +86,7 @@ fun StatsScreen(viewModel: StatsViewModel) {
             .padding(horizontal = 24.dp),
     ) {
         Spacer(Modifier.height(48.dp))
-        Text("Stats", style = MaterialTheme.typography.headlineLarge, color = Ic.Ink)
+        Text("Statistics", style = MaterialTheme.typography.headlineLarge, color = Ic.Ink)
         Spacer(Modifier.height(20.dp))
         PeriodBar(period, viewModel::setPeriod)
         Spacer(Modifier.height(10.dp))
@@ -100,21 +100,10 @@ fun StatsScreen(viewModel: StatsViewModel) {
 
         TotalCard(summary, profile.dailyTargetMinutes)
 
-        if (!summary.hasData) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                if (summary.isCurrent) "Nothing recorded yet. Open Instagram from the Apps tab and your time, posts and scrolling will show up here."
-                else "Nothing was recorded in this period.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Ic.Muted,
-            )
-        }
+        Spacer(Modifier.height(16.dp))
+        CompareCard(summary)
 
-        Section("Compared with before") {
-            CompareCard(summary)
-        }
-
-        Section("Time by app") {
+        StatsCard("Time by app") {
             val apps = SocialApp.entries.filter { it.enabled }
             val maxMs = (apps.maxOfOrNull { summary.perApp[it]?.totalMs ?: 0L } ?: 0L).coerceAtLeast(1L)
             apps.forEach { app ->
@@ -133,7 +122,7 @@ fun StatsScreen(viewModel: StatsViewModel) {
             }
         }
 
-        Section(if (period == Period.Day) "Time of day" else "When you tend to scroll") {
+        StatsCard(if (period == Period.Day) "Time of day" else "When you tend to scroll") {
             val hours = summary.total.hourMs.map { it / 60_000f }
             val avg = hours.filter { it > 0f }.let { if (it.isEmpty()) 0f else it.average().toFloat() }
             BarChart(
@@ -148,7 +137,7 @@ fun StatsScreen(viewModel: StatsViewModel) {
         }
 
         if (period != Period.Day) {
-            Section("Day by day") {
+            StatsCard("Day by day") {
                 val target = profile.dailyTargetMinutes.toFloat()
                 BarChart(
                     values = summary.daily.map { it.second / 60_000f },
@@ -167,7 +156,7 @@ fun StatsScreen(viewModel: StatsViewModel) {
             }
         }
 
-        Section("Activity") {
+        StatsCard("Activity") {
             SocialApp.entries.filter { it.enabled }.forEach { app ->
                 ActivityRow(app, summary.perApp[app] ?: AppDay())
             }
@@ -175,17 +164,19 @@ fun StatsScreen(viewModel: StatsViewModel) {
 
         // Only the daily view has a written summary; week and month just show the numbers.
         if (period == Period.Day) {
-            Section("Habit summary") {
-                InsightCard(insight, hasData = summary.hasData, onRetry = viewModel::generateInsight)
+            StatsCard("Habit summary") {
+                InsightContent(insight, hasData = summary.hasData, onRetry = viewModel::generateInsight)
             }
         }
 
-        Section("How this is measured") { MeasuredNote() }
         Spacer(Modifier.height(32.dp))
     }
 }
 
 private val BarShape = RoundedCornerShape(20.dp)
+
+/** Day / Week / Month and the date bar below it are the same height. */
+private val BarHeight = 56.dp
 
 /** The top bar: choose Day, Week or Month. */
 @Composable
@@ -193,6 +184,7 @@ private fun PeriodBar(selected: Period, onSelect: (Period) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
+            .height(BarHeight)
             .clip(BarShape)
             .background(Ic.Chip)
             .border(1.dp, Ic.Divider, BarShape)
@@ -203,10 +195,10 @@ private fun PeriodBar(selected: Period, onSelect: (Period) -> Unit) {
             Box(
                 Modifier
                     .weight(1f)
+                    .fillMaxHeight()
                     .clip(RoundedCornerShape(15.dp))
                     .background(if (on) Ic.Ink else Color.Transparent)
-                    .clickable { onSelect(p) }
-                    .padding(vertical = 11.dp),
+                    .clickable { onSelect(p) },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(p.label, style = MaterialTheme.typography.titleSmall, color = if (on) Ic.Background else Ic.Ink)
@@ -224,7 +216,7 @@ private fun DateNavBar(label: String, canGoForward: Boolean, onBack: () -> Unit,
     Row(
         Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(BarHeight)
             .clip(BarShape)
             .background(Ic.Chip)
             .border(1.dp, Ic.Divider, BarShape),
@@ -277,7 +269,7 @@ private fun TotalCard(summary: PeriodSummary, targetMinutes: Int) {
     }
     val total = summary.total.totalMs
     Card {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = Ic.Muted)
+        Text(label, style = MaterialTheme.typography.titleMedium, color = Ic.Ink)
         Spacer(Modifier.height(6.dp))
         Text(formatDuration(total), style = MaterialTheme.typography.displayMedium, color = Ic.Ink)
 
@@ -296,11 +288,9 @@ private fun TotalCard(summary: PeriodSummary, targetMinutes: Int) {
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         val targetMs = targetMinutes * 60_000L
         if (summary.period == Period.Day) {
-            IcProgressBar((total / targetMs.toFloat()).coerceAtMost(1f))
-            Spacer(Modifier.height(8.dp))
             Text(
                 if (total <= targetMs) "${formatDuration(total)} of your ${formatDuration(targetMs)} goal"
                 else "${formatDuration(total - targetMs)} over your ${formatDuration(targetMs)} goal",
@@ -321,7 +311,7 @@ private fun TotalCard(summary: PeriodSummary, targetMinutes: Int) {
 /** Today vs yesterday, this week vs last week, this month vs last month: whichever period is selected. */
 @Composable
 private fun CompareCard(summary: PeriodSummary) {
-    val labels = comparisonLabels(summary, LocalDate.now())
+    val labels = comparisonLabels(summary.period)
     val asShare = summary.period == Period.Day && summary.isCurrent
     val cur = summary.total
     val prev = summary.previous
@@ -333,10 +323,6 @@ private fun CompareCard(summary: PeriodSummary) {
     )
     Card {
         Text(labels.title, style = MaterialTheme.typography.titleMedium, color = Ic.Ink)
-        labels.note?.let {
-            Spacer(Modifier.height(4.dp))
-            Text(it, style = MaterialTheme.typography.bodySmall, color = Ic.Muted)
-        }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth()) {
             Spacer(Modifier.weight(1.25f))
@@ -365,27 +351,7 @@ private data class CompareRow(val label: String, val current: String, val previo
 
 @Composable
 private fun CompareCell(text: String, modifier: Modifier, style: androidx.compose.ui.text.TextStyle, color: Color) {
-    Text(text, modifier, style = style, color = color, textAlign = TextAlign.End, maxLines = 2)
-}
-
-/** Plain-language account of where each number comes from, so nobody mistakes it for phone-wide screen time. */
-@Composable
-private fun MeasuredNote() {
-    val body = MaterialTheme.typography.bodySmall
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "Time: counted while an app is open on screen inside InnerCircle, split by the hour. Time you spend in Instagram outside InnerCircle, or in other apps, isn't included.",
-            style = body, color = Ic.Muted,
-        )
-        Text(
-            "Stories: each story you open. Posts seen: feed posts that were mostly on screen for at least a second, counted once each (hidden ads and suggestions never count).",
-            style = body, color = Ic.Muted,
-        )
-        Text(
-            "Scrolled: how far you moved the page, converted to metres from the screen's pixel density. It's an estimate, typically within about 10%.",
-            style = body, color = Ic.Muted,
-        )
-    }
+    Text(text, modifier, style = style, color = color, textAlign = TextAlign.Center, maxLines = 2)
 }
 
 @Composable
@@ -407,12 +373,8 @@ private fun ActivityRow(app: SocialApp, day: AppDay) {
 
 @Composable
 private fun Metric(label: String, value: String, modifier: Modifier) {
-    Column(
-        modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Ic.Chip)
-            .padding(14.dp),
-    ) {
+    // No tint of its own: it now sits inside a box of the same colour, so it lines up with the title above.
+    Column(modifier) {
         Text(value, style = MaterialTheme.typography.titleLarge, color = Ic.Ink, maxLines = 1)
         Spacer(Modifier.height(2.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, color = Ic.Muted, maxLines = 2)
@@ -422,8 +384,8 @@ private fun Metric(label: String, value: String, modifier: Modifier) {
 private const val AUTO_INSIGHT_DELAY_MS = 600L
 
 @Composable
-private fun InsightCard(insight: InsightUi, hasData: Boolean, onRetry: () -> Unit) {
-    Card {
+private fun InsightContent(insight: InsightUi, hasData: Boolean, onRetry: () -> Unit) {
+    Column {
         when (insight) {
             is InsightUi.Loading -> {
                 InsightProgress(if (insight.previous != null) "Updating your summary…" else "Reading your habits…")
@@ -465,12 +427,12 @@ private fun InsightProgress(text: String) {
 
 @Composable
 private fun InsightBody(insight: Insight) {
-    Text("Usage summary", style = MaterialTheme.typography.labelLarge, color = Ic.Muted)
+    Text("Usage summary", style = MaterialTheme.typography.bodyLarge, color = Ic.Muted)
     Spacer(Modifier.height(6.dp))
-    Text(insight.summary, style = MaterialTheme.typography.bodyLarge, color = Ic.Ink)
+    Text(insight.summary, style = MaterialTheme.typography.bodyMedium, color = Ic.Ink)
     if (insight.recommendations.isNotEmpty()) {
         Spacer(Modifier.height(20.dp))
-        Text("Wellness recommendations", style = MaterialTheme.typography.labelLarge, color = Ic.Muted)
+        Text("Wellness recommendations", style = MaterialTheme.typography.bodyLarge, color = Ic.Muted)
         insight.recommendations.forEachIndexed { i, rec ->
             Spacer(Modifier.height(10.dp))
             Row {
@@ -481,12 +443,15 @@ private fun InsightBody(insight: Insight) {
     }
 }
 
+/** A box like the screen-time and comparison ones, with its title inside. */
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Spacer(Modifier.height(28.dp))
-    Text(title, style = MaterialTheme.typography.titleMedium, color = Ic.Ink)
-    Spacer(Modifier.height(14.dp))
-    Column(content = content)
+private fun StatsCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Spacer(Modifier.height(16.dp))
+    Card {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = Ic.Ink)
+        Spacer(Modifier.height(14.dp))
+        content()
+    }
 }
 
 @Composable

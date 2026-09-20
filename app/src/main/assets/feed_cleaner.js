@@ -69,6 +69,22 @@
   var coverTimer = null;
   var locks = [];        // active scroll locks
 
+  // What changed since the last pass. Rescanning the whole feed on every change made Instagram sluggish,
+  // so text rules only look at newly added nodes, with a full scan now and then as a safety net.
+  var pendingNodes = [];
+  var fullScan = true;
+  var lastFullScan = 0;
+  var lastCountAt = 0;
+
+  // End of feed: the "You're all caught up" marker, and how far the page may scroll because of it.
+  var AFTER_ATTR = 'data-ic-after';   // posts after the marker, made invisible but left in place
+  var END_PAD = 16;                   // breathing room under the marker, in px
+  var caughtUp = null;
+  var endLimit = Infinity;
+  var FULL_SCAN_MS = 5000;     // safety net for text changed in place, which the observer doesn't report
+  var COUNT_LOG_MS = 2000;     // how often the "N matches" diagnostics are recomputed
+  var MAX_PENDING = 400;       // past this, a full scan is cheaper than walking every added node
+
   // Story ads: paths recognised as ads (the usage tracker asks, so ads aren't counted as stories),
   // and the state of the skip in progress.
   var adPaths = {};
@@ -136,30 +152,43 @@
   }
 
   // --- Text rules: find label text, hide the containing element ---------------------------------
-  function applyTextRule(rule) {
+  function textCandidates(rule, nodes) {
+    if (!nodes) return document.querySelectorAll(rule.textSelector);
+    var found = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (!n.isConnected) continue;
+      if (n.matches(rule.textSelector)) found.push(n);
+      var inside = n.querySelectorAll(rule.textSelector);
+      for (var j = 0; j < inside.length; j++) found.push(inside[j]);
+    }
+    return found;
+  }
+
+  // [nodes] is the list of elements added since the last pass, or null to scan the whole page.
+  function applyTextRule(rule, nodes) {
     var wanted = rule.texts.map(function (t) { return t.trim().toLowerCase(); });
-    var candidates = document.querySelectorAll(rule.textSelector);
+    var candidates = textCandidates(rule, nodes);
+    var hiddenNow = 0;
     for (var i = 0; i < candidates.length; i++) {
       var el = candidates[i];
       if (el.childElementCount !== 0) continue; // leaf elements only: cheap, and avoids matching wrappers
       var text = (el.textContent || '').trim().toLowerCase();
       if (wanted.indexOf(text) === -1) continue;
+      if (rule.endOfFeed) {
+        if (el !== caughtUp) { caughtUp = el; log('endOfFeed: found the "all caught up" marker'); }
+        continue;
+      }
       var target = el.closest(rule.hideClosest);
       if (target && !target.hasAttribute(RULE_ATTR)) {
         target.setAttribute(RULE_ATTR, rule.name);
         hideElement(target, rule.keepLayoutBox);
+        hiddenNow++;
       }
     }
-    reportCount(rule.name, document.querySelectorAll('[' + RULE_ATTR + '="' + rule.name + '"]').length);
+    if (!rule.endOfFeed && (!nodes || hiddenNow)) reportCount(rule.name, document.querySelectorAll('[' + RULE_ATTR + '="' + rule.name + '"]').length);
   }
 
-  // --- Explore tab -> straight to the search view ----------------------------------------------
-  // The Explore grid is never shown. Arriving on it (tab tap, cold start) focuses the search input,
-  // which makes Instagram's own router open explore/search with the recent-searches list.
-  //
-  // Cancel and Back from the search view both land on the Explore route again. Re-opening search
-  // there would trap the user, so when we arrive on Explore *from* search we walk history back until
-  // we're off both routes, i.e. back to wherever the user came from.
   function goBackOnce() {
     var before = location.pathname;
     history.back();
@@ -579,14 +608,29 @@
     adSkip.timer = setTimeout(stepAdSkip, AD_SKIP_STEP_MS);
   }
 
+  // Watching every text and attribute change in the page is only worth it while a story is open.
+  function syncStoryObserver(onStories) {
+    if (onStories && !storyObserver) {
+      storyObserver = new MutationObserver(queueStoryCheck);
+      storyObserver.observe(document.documentElement, {
+        subtree: true, characterData: true, attributes: true, attributeFilter: ['href', 'aria-label'],
+      });
+    } else if (!onStories && storyObserver) {
+      storyObserver.disconnect();
+      storyObserver = null;
+    }
+  }
+
   function applyStoryAds() {
     var rule = config.storyAds;
     if (!rule) return;
     var path = location.pathname;
     if (!matches(rule.pathPattern, path)) {
+      syncStoryObserver(false);
       endAdSkip(); hideAdCover(); prevAd = { el: null, path: null }; snapPath = null;
       return;
     }
+    syncStoryObserver(true);
     if (config.debug && path !== snapPath) { // record every story once it has had a moment to draw
       snapPath = path;
       setTimeout(function () { if (location.pathname === path) snapshot('story'); }, 500);
@@ -623,6 +667,56 @@
     });
   }
 
+  // --- End of feed ------------------------------------------------------------------------------
+  // After "You're all caught up" Instagram goes on with unlabelled "Suggested Posts". Collapsing them
+  // makes it load more without end (see InstagramSelectors), so they stay laid out but invisible, and the
+  // page is not allowed to scroll past the marker, which also keeps Instagram from loading further.
+  function feedItemOf(el) {
+    var n = el;
+    while (n.parentElement && !n.parentElement.querySelector(':scope > article')) n = n.parentElement;
+    return n.parentElement ? n : el;
+  }
+
+  function updateEndLimit() {
+    if (!caughtUp || !caughtUp.isConnected) { endLimit = Infinity; return; }
+    var box = feedItemOf(caughtUp).getBoundingClientRect();
+    // Not laid out (a detached or measuring copy): a bogus position must never lock the page in place.
+    if (!box.width || !box.height) { endLimit = Infinity; return; }
+    endLimit = Math.max(0, box.bottom + window.scrollY - (window.innerHeight - navBottomInset()) + END_PAD);
+  }
+
+  function applyEndOfFeed() {
+    if (!caughtUp || !caughtUp.isConnected) { caughtUp = null; endLimit = Infinity; return; }
+    var posts = document.querySelectorAll('article');
+    for (var i = 0; i < posts.length; i++) {
+      var post = posts[i];
+      if (post.hasAttribute(AFTER_ATTR)) continue;
+      if (caughtUp.compareDocumentPosition(post) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        post.setAttribute(AFTER_ATTR, '1');
+        post.style.setProperty('visibility', 'hidden', 'important');
+        post.style.setProperty('pointer-events', 'none', 'important');
+      }
+    }
+    updateEndLimit();
+  }
+
+  function onEndScroll() {
+    if (endLimit === Infinity) return;
+    updateEndLimit();
+    if (window.scrollY > endLimit + 1) window.scrollTo(0, endLimit);
+  }
+
+  function releaseEndOfFeed() {
+    caughtUp = null;
+    endLimit = Infinity;
+    var held = document.querySelectorAll('[' + AFTER_ATTR + ']');
+    for (var i = 0; i < held.length; i++) {
+      held[i].removeAttribute(AFTER_ATTR);
+      held[i].style.removeProperty('visibility');
+      held[i].style.removeProperty('pointer-events');
+    }
+  }
+
   // --- Main pass -------------------------------------------------------------------------------
   function applyAll() {
     scheduled = false;
@@ -631,20 +725,34 @@
       if (path !== lastPath) {
         var prev = lastPath;
         lastPath = path;
+        fullScan = true;
         guard('routeChange', function () { onRouteChange(prev, path); });
       }
       guard('storyAds', applyStoryAds); // first: an ad must be covered before anything else in this pass delays the frame
 
       var active = activeHideRules();
       ensureStyle(active);
-      active.forEach(function (rule) {
-        guard(rule.name, function () {
-          reportCount(rule.name, document.querySelectorAll(rule.selector).length);
+      var now = Date.now();
+      // Counting matches is for diagnostics only, and some selectors (:has) are costly, so not every frame.
+      if (now - lastCountAt >= COUNT_LOG_MS) {
+        lastCountAt = now;
+        active.forEach(function (rule) {
+          guard(rule.name, function () {
+            reportCount(rule.name, document.querySelectorAll(rule.selector).length);
+          });
         });
-      });
-      config.textRules.forEach(function (rule) {
-        guard(rule.name, function () { applyTextRule(rule); });
-      });
+      }
+      if (now - lastFullScan >= FULL_SCAN_MS) fullScan = true;
+      var nodes = fullScan ? null : pendingNodes;
+      if (fullScan) lastFullScan = now;
+      fullScan = false;
+      pendingNodes = [];
+      if (!nodes || nodes.length) {
+        config.textRules.forEach(function (rule) {
+          guard(rule.name, function () { applyTextRule(rule, nodes); });
+        });
+      }
+      guard('endOfFeed', applyEndOfFeed);
       guard('explore', tryOpenSearch);
       guard('cover', updateCover);
       guard('scrollLock', applyScrollLocks);
@@ -667,17 +775,34 @@
     // Instagram is a single-page app: the document survives navigations, so one observer keeps
     // working as the feed grows on scroll and as routes change. childList only: our own
     // attribute/style changes don't retrigger it.
-    observer = new MutationObserver(schedule);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    observer = new MutationObserver(function (records) {
+      for (var i = 0; i < records.length && !fullScan; i++) {
+        if (records[i].type === 'characterData') { // text edited in place: look at the element that holds it
+          var holder = records[i].target.parentElement;
+          if (holder) pendingNodes.push(holder);
+          continue;
+        }
+        var added = records[i].addedNodes;
+        for (var j = 0; j < added.length; j++) {
+          var n = added[j];
+          var el = n.nodeType === 1 ? n : (n.nodeType === 3 ? n.parentElement : null);
+          if (el) pendingNodes.push(el);
+        }
+        if (pendingNodes.length > MAX_PENDING) { fullScan = true; pendingNodes = []; }
+      }
+      schedule();
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     window.addEventListener('popstate', schedule);
     document.addEventListener('click', onTabClick, true);
+    window.addEventListener('scroll', onEndScroll, { passive: true });
     // Instagram updates a story's name and labels by editing text in place, which the observer above
     // (adds/removes only) never sees, so while a story is open it's checked on a timer as well.
-    adPollTimer = setInterval(function () { guard('storyAds', applyStoryAds); }, AD_POLL_MS);
-    storyObserver = new MutationObserver(queueStoryCheck);
-    storyObserver.observe(document.documentElement, {
-      subtree: true, characterData: true, attributes: true, attributeFilter: ['href', 'aria-label'],
-    });
+    adPollTimer = setInterval(function () {
+      guard('storyAds', applyStoryAds);
+      // The safety-net scan must not wait for some other change to come along and trigger a pass.
+      if (Date.now() - lastFullScan >= FULL_SCAN_MS) { fullScan = true; schedule(); }
+    }, AD_POLL_MS);
     applyAll();
     log('installed (' + cfg.hideRules.length + ' hide rules, ' + cfg.textRules.length + ' text rules, ' +
         cfg.scrollLocks.length + ' scroll locks)');
@@ -688,6 +813,8 @@
     observer = null;
     window.removeEventListener('popstate', schedule);
     document.removeEventListener('click', onTabClick, true);
+    window.removeEventListener('scroll', onEndScroll);
+    releaseEndOfFeed();
     hideCover();
     if (adPollTimer) clearInterval(adPollTimer);
     adPollTimer = null;

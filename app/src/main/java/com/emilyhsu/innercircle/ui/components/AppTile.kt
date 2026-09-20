@@ -5,97 +5,76 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.withSave
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.emilyhsu.innercircle.data.SocialApp
-import com.emilyhsu.innercircle.ui.theme.Ic
 
-/** The rounded-square platform icon from the mockup: brand colour when live, grey when not. */
+/**
+ * The platform's app icon: its brand colour (Instagram's gradient) with its white logo on top.
+ * Platforms that aren't connected yet are shown faded, so they read as "coming soon".
+ */
 @Composable
 fun AppTile(app: SocialApp, size: Dp, modifier: Modifier = Modifier) {
-    val fill = if (app.enabled) Ic.Instagram else Ic.Disabled
     Box(
         modifier
             .size(size)
+            .alpha(if (app.enabled) 1f else DISABLED_ALPHA)
             .clip(RoundedCornerShape(size * 0.25f))
-            .background(fill),
+            .background(tileBrush(app)),
         contentAlignment = Alignment.Center,
     ) {
-        AppGlyph(app, size * 0.55f, Ic.Background)
+        AppLogo(app, size * 0.58f, Color.White)
     }
 }
 
+/** Just the logo shape, in one colour. */
 @Composable
-fun AppGlyph(app: SocialApp, size: Dp, color: Color) {
-    when (app) {
-        SocialApp.Instagram -> InstagramGlyph(size, color)
-        SocialApp.YouTube -> PlayGlyph(size, color)
-        SocialApp.TikTok -> TextGlyph("♪", size * 1.1f, color)
-        SocialApp.Facebook -> TextGlyph("f", size * 1.2f, color)
-        SocialApp.LinkedIn -> TextGlyph("in", size * 0.85f, color)
-    }
-}
-
-@Composable
-private fun TextGlyph(text: String, size: Dp, color: Color) {
-    Text(text, color = color, fontSize = fontSize(size), fontWeight = FontWeight.Bold)
-}
-
-private fun fontSize(size: Dp): TextUnit = size.value.sp
-
-@Composable
-private fun InstagramGlyph(size: Dp, color: Color) {
+fun AppLogo(app: SocialApp, size: Dp, color: Color) {
+    val path = remember(app) { PathParser().parsePathString(logoPath(app)).toPath() }
     Canvas(Modifier.size(size)) {
-        val s = this.size.minDimension
-        val w = s * 0.09f
-        drawRoundRect(
-            color,
-            topLeft = Offset(w / 2, w / 2),
-            size = Size(s - w, s - w),
-            cornerRadius = CornerRadius(s * 0.3f),
-            style = Stroke(w),
-        )
-        drawCircle(color, radius = s * 0.22f, center = Offset(s / 2, s / 2), style = Stroke(w))
-        drawCircle(color, radius = s * 0.055f, center = Offset(s * 0.76f, s * 0.24f))
-    }
-}
-
-@Composable
-private fun PlayGlyph(size: Dp, color: Color) {
-    Canvas(Modifier.size(size)) {
-        val s = this.size.minDimension
-        val w = s * 0.09f
-        drawRoundRect(
-            color,
-            topLeft = Offset(w / 2, s * 0.14f),
-            size = Size(s - w, s * 0.72f),
-            cornerRadius = CornerRadius(s * 0.22f),
-            style = Stroke(w),
-        )
-        val tri = Path().apply {
-            moveTo(s * 0.42f, s * 0.36f)
-            lineTo(s * 0.66f, s * 0.5f)
-            lineTo(s * 0.42f, s * 0.64f)
-            close()
+        // The path is drawn on a 24 x 24 grid; scale it up to whatever size was asked for.
+        val scale = this.size.minDimension / LOGO_GRID
+        drawContext.canvas.withSave {
+            drawContext.canvas.scale(scale, scale)
+            drawPath(path, color)
         }
-        drawPath(tri, color, style = Stroke(w * 0.9f, join = StrokeJoin.Round))
     }
 }
+
+private fun logoPath(app: SocialApp): String = when (app) {
+    SocialApp.Instagram -> BrandLogos.INSTAGRAM
+    SocialApp.YouTube -> BrandLogos.YOUTUBE
+    SocialApp.TikTok -> BrandLogos.TIKTOK
+    SocialApp.Facebook -> BrandLogos.FACEBOOK
+    SocialApp.LinkedIn -> BrandLogos.LINKEDIN
+}
+
+private fun tileBrush(app: SocialApp): Brush = when (app) {
+    // Bottom-left to top-right, like the real icon's sweep from yellow through pink to purple.
+    SocialApp.Instagram -> Brush.linearGradient(
+        colors = listOf(Color(0xFFFEDA75), Color(0xFFFA7E1E), Color(0xFFD62976), Color(0xFF962FBF), Color(0xFF4F5BD5)),
+        start = Offset(0f, Float.POSITIVE_INFINITY),
+        end = Offset(Float.POSITIVE_INFINITY, 0f),
+    )
+    SocialApp.YouTube -> Brush.linearGradient(listOf(Color(0xFFFF0000), Color(0xFFFF0000)))
+    SocialApp.TikTok -> Brush.linearGradient(listOf(Color(0xFF000000), Color(0xFF000000)))
+    SocialApp.Facebook -> Brush.linearGradient(listOf(Color(0xFF0866FF), Color(0xFF0866FF)))
+    SocialApp.LinkedIn -> Brush.linearGradient(listOf(Color(0xFF0A66C2), Color(0xFF0A66C2)))
+}
+
+private const val LOGO_GRID = 24f
+private const val DISABLED_ALPHA = 0.4f
 
 /** Standard tile size used on the Apps screen and the "Opening…" screen. */
 val TileSize = 60.dp

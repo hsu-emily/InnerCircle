@@ -5,11 +5,9 @@ import com.emilyhsu.innercircle.data.Period
 import com.emilyhsu.innercircle.data.UsageDays
 import com.emilyhsu.innercircle.data.summarizeUsage
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.util.Locale
 
 class ComparisonTest {
     private val sat = LocalDate.of(2026, 9, 19)
@@ -59,30 +57,24 @@ class ComparisonTest {
         assertEquals(400.0, s.previous.scrollPx, 0.0)
     }
 
-    private fun labels(p: Period, anchor: LocalDate, today: LocalDate = sat): ComparisonLabels {
-        val s = summarizeUsage(emptyMap(), p, anchor, today, sun)
-        return comparisonLabels(s, today, Locale.US)
+    @Test fun dayReadsTodayVsYesterday() {
+        val l = comparisonLabels(Period.Day)
+        assertEquals("Today vs Yesterday", l.title)
+        assertEquals("Today", l.current)
+        assertEquals("Yesterday", l.previous)
     }
 
-    @Test fun titlesReadTodayVsYesterdayAndSoOn() {
-        assertEquals("Today vs yesterday", labels(Period.Day, sat).title)
-        assertEquals("This week vs last week", labels(Period.Week, sat).title)
-        assertEquals("This month vs last month", labels(Period.Month, sat).title)
+    @Test fun weekReadsThisWeekVsLastWeek() {
+        val l = comparisonLabels(Period.Week)
+        assertEquals("This week vs Last week", l.title)
+        assertEquals("This week", l.current)
+        assertEquals("Last week", l.previous)
     }
 
-    @Test fun notesExplainWhenTheComparisonIsNotAWholeAgainstAWhole() {
-        assertEquals(
-            "Today isn't over yet, so the change shows how much of yesterday's total you've reached so far.",
-            labels(Period.Day, sat).note,
-        )
-        assertEquals("Comparing the first 3 days of each week.", labels(Period.Week, LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 15)).note)
-        assertEquals("Comparing the first 10 days of each month.", labels(Period.Month, LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 10)).note)
-        assertNull("a finished week needs no note", labels(Period.Week, LocalDate.of(2026, 9, 8)).note)
-    }
-
-    @Test fun pastPeriodsAreNamedByTheirDates() {
-        assertEquals("Sep 12 vs Sep 11", labels(Period.Day, LocalDate.of(2026, 9, 12)).title)
-        assertEquals("Sep 6–12 vs Aug 30 – Sep 5", labels(Period.Week, LocalDate.of(2026, 9, 8)).title)
-        assertEquals("August vs July", labels(Period.Month, LocalDate.of(2026, 8, 10)).title)
+    @Test fun monthReadsThisMonthVsLastMonth() {
+        val l = comparisonLabels(Period.Month)
+        assertEquals("This month vs Last month", l.title)
+        assertEquals("This month", l.current)
+        assertEquals("Last month", l.previous)
     }
 }

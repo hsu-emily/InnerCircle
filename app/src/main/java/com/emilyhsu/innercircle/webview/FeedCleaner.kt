@@ -107,6 +107,7 @@ object FeedCleaner {
                         .put("texts", JSONArray(rule.texts))
                         .put("hideClosest", rule.hideClosest)
                         .put("keepLayoutBox", rule.keepLayoutBox)
+                        .put("endOfFeed", rule.endOfFeed)
                 )
             }
         })

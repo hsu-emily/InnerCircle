@@ -13,7 +13,6 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.time.temporal.WeekFields
 import java.util.Locale
-import kotlin.random.Random
 
 /** date (yyyy-MM-dd) -> app id -> what was measured that day. */
 typealias UsageDays = Map<String, Map<String, AppDay>>
@@ -46,37 +45,6 @@ class UsageRepository(context: Context) : UsageSink {
         mutate { days ->
             val date = Instant.ofEpochMilli(atMs).atZone(zone).toLocalDate()
             days.add(date, app, AppDay(stories = stories, posts = posts, scrollPx = scrollPx))
-        }
-    }
-
-    fun clear() = mutate { it.clear() }
-
-    /** Fills the last 30 days with plausible numbers so the Stats screen and the AI have something to show. */
-    fun seedDemoData() = mutate { days ->
-        days.clear()
-        val rng = Random(42)
-        val today = LocalDate.now(zone)
-        // Evening and late-night heavy, like the habit this app is trying to change.
-        val hourWeights = listOf(
-            2, 1, 1, 0, 0, 1, 3, 5, 4, 3, 3, 4,
-            6, 5, 4, 4, 5, 6, 8, 10, 12, 11, 8, 4,
-        )
-        for (back in 0 until 30) {
-            val minutes = (35 + rng.nextInt(95)) * (if (back % 7 in 5..6) 13 else 10) / 10
-            val totalMs = minutes * 60_000L
-            val weightSum = hourWeights.sum().toDouble()
-            val hours = hourWeights.map { (totalMs * it / weightSum).toLong() }
-            days.add(
-                today.minusDays(back.toLong()),
-                SocialApp.Instagram,
-                AppDay(
-                    totalMs = hours.sum(),
-                    hourMs = hours,
-                    stories = 8 + rng.nextInt(40),
-                    posts = 20 + minutes / 2 + rng.nextInt(15),
-                    scrollPx = (minutes * (900 + rng.nextInt(500))).toDouble(),
-                ),
-            )
         }
     }
 

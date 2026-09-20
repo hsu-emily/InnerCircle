@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.InnerCircle" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- Matches the app background so there is no white flash before Compose draws. -->
-        <item name="android:windowBackground">#FFF9F6F1</item>
+        <!-- The first screen is the splash, so the launch window is the splash's grey: no cream or white
+             flash before Compose draws it. Every other screen paints its own background. -->
+        <item name="android:windowBackground">#FFC2BFBB</item>
     </style>
 </resources>

@@ -84,7 +84,7 @@ private object Routes {
 
 private enum class Tab(val route: String, val label: String) {
     Apps(Routes.APPS, "Apps"),
-    Stats(Routes.STATS, "Stats"),
+    Stats(Routes.STATS, "Statistics"),
     Settings(Routes.SETTINGS, "Settings"),
 }
 
@@ -133,10 +133,7 @@ fun InnerCircleRoot() {
             }
 
             composable(Routes.APPS) {
-                AppsScreen(
-                    onOpenApp = { app -> nav.navigate(Routes.opening(app)) },
-                    onOpenSettings = { nav.navigateToTab(Routes.SETTINGS) },
-                )
+                AppsScreen(onOpenApp = { app -> nav.navigate(Routes.opening(app)) })
             }
 
             composable(Routes.STATS) {

@@ -15,14 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,7 +40,6 @@ import com.emilyhsu.innercircle.util.formatDuration
 fun SettingsScreen(container: AppContainer, onRetakeSurvey: () -> Unit) {
     val profile by container.profile.profile.collectAsState()
     val exitMethod by container.settings.exitMethod.collectAsState()
-    var confirmClear by remember { mutableStateOf(false) }
     var sliderMinutes by remember(profile.dailyTargetMinutes) { mutableStateOf(profile.dailyTargetMinutes.toFloat()) }
 
     Column(
@@ -80,7 +76,7 @@ fun SettingsScreen(container: AppContainer, onRetakeSurvey: () -> Unit) {
 
         Group("Daily limit") {
             Text(formatDuration(sliderMinutes.toLong() * 60_000L), style = MaterialTheme.typography.headlineSmall, color = Ic.Ink)
-            Text("Used for your progress on the Stats tab and in the AI's advice.", style = MaterialTheme.typography.bodySmall, color = Ic.Muted)
+            Text("Used for your progress on the Statistics tab and in the AI's advice.", style = MaterialTheme.typography.bodySmall, color = Ic.Muted)
             Slider(
                 value = sliderMinutes,
                 onValueChange = { sliderMinutes = (it / 5f).toInt() * 5f },
@@ -115,19 +111,10 @@ fun SettingsScreen(container: AppContainer, onRetakeSurvey: () -> Unit) {
 
         Group("AI insights") {
             Text(
-                "InnerCircle writes your habit summary with AI (powered by OpenAI), so there's nothing to set up. Only your survey answers and usage totals are sent, never account names or content. Your daily habit summary is written automatically when you open the Day view in Stats, and there's a daily limit on how many can be written.",
+                "InnerCircle writes your habit summary with AI (powered by OpenAI), so there's nothing to set up. Only your survey answers and usage totals are sent, never account names or content. Your daily habit summary is written automatically when you open the Day view in Statistics.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Ic.Muted,
             )
-        }
-
-        Group("Data") {
-            ActionRow("Add sample data (30 days)") {
-                container.usage.seedDemoData()
-                container.settings.clearInsights()
-            }
-            HorizontalDivider(color = Ic.Divider)
-            ActionRow("Clear all usage data") { confirmClear = true }
         }
 
         Group("About") {
@@ -139,23 +126,6 @@ fun SettingsScreen(container: AppContainer, onRetakeSurvey: () -> Unit) {
             )
         }
         Spacer(Modifier.height(32.dp))
-    }
-
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            containerColor = Ic.Background,
-            title = { Text("Clear all usage data?") },
-            text = { Text("This removes your recorded time, posts, stories and saved insights. Your survey answers stay.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    container.usage.clear()
-                    container.settings.clearInsights()
-                    confirmClear = false
-                }) { Text("Clear", color = Ic.Instagram) }
-            },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel", color = Ic.Ink) } },
-        )
     }
 }
 

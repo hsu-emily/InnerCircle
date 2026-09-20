@@ -1,7 +1,6 @@
 package com.emilyhsu.innercircle.util
 
 import com.emilyhsu.innercircle.data.Period
-import com.emilyhsu.innercircle.data.PeriodMath
 import com.emilyhsu.innercircle.data.PeriodSummary
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -87,40 +86,16 @@ fun changeBetween(current: Double, previous: Double, asShareOfPrevious: Boolean 
     }
 }
 
-/** Column headings and the title for the comparison box. [note] explains a like-for-like comparison. */
-data class ComparisonLabels(val title: String, val current: String, val previous: String, val note: String?)
+/** The title and column headings for the comparison box: always words, never dates. */
+data class ComparisonLabels(val title: String, val current: String, val previous: String)
 
-fun comparisonLabels(summary: PeriodSummary, today: LocalDate, locale: Locale = Locale.getDefault()): ComparisonLabels {
-    fun fmt(pattern: String) = DateTimeFormatter.ofPattern(pattern, locale)
-    val prevStart = PeriodMath.previousStart(summary.period, summary.start)
-    val prevEnd = PeriodMath.end(summary.period, prevStart)
-
-    fun shortRange(a: LocalDate, b: LocalDate): String =
-        if (a.year == b.year && a.month == b.month) "${fmt("MMM d").format(a)}–${b.dayOfMonth}"
-        else "${fmt("MMM d").format(a)} – ${fmt("MMM d").format(b)}"
-    fun monthName(d: LocalDate) = fmt(if (d.year == today.year) "MMMM" else "MMM yyyy").format(d)
-
-    if (summary.isCurrent) {
-        val (cur, prev) = when (summary.period) {
-            Period.Day -> "Today" to "Yesterday"
-            Period.Week -> "This week" to "Last week"
-            Period.Month -> "This month" to "Last month"
-        }
-        val note = when {
-            summary.period == Period.Day ->
-                "Today isn't over yet, so the change shows how much of yesterday's total you've reached so far."
-            summary.isPartial ->
-                "Comparing the first ${summary.elapsedDays} days of each ${summary.period.label.lowercase()}."
-            else -> null
-        }
-        return ComparisonLabels("$cur vs ${prev.lowercase()}", cur, prev, note)
+fun comparisonLabels(period: Period): ComparisonLabels {
+    val (cur, prev) = when (period) {
+        Period.Day -> "Today" to "Yesterday"
+        Period.Week -> "This week" to "Last week"
+        Period.Month -> "This month" to "Last month"
     }
-    val (cur, prev) = when (summary.period) {
-        Period.Day -> fmt("MMM d").format(summary.start) to fmt("MMM d").format(prevStart)
-        Period.Week -> shortRange(summary.start, summary.end) to shortRange(prevStart, prevEnd)
-        Period.Month -> monthName(summary.start) to monthName(prevStart)
-    }
-    return ComparisonLabels("$cur vs $prev", cur, prev, null)
+    return ComparisonLabels("$cur vs $prev", cur, prev)
 }
 
 // --- time-of-day windows (what the AI reads instead of exact session times) --------------------
