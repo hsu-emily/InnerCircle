@@ -5,11 +5,7 @@ websites inside the app, removes the parts designed to keep you scrolling where 
 suggested posts, Reels, Shorts, the For You feed, the endless feed after "you're all caught up"), measures
 how you actually use them, and turns the combined numbers into a short, personal habit summary with an AI.
 
-It started as a hackathon project. It is a personal tool, not a Play Store product, and it is **not
-affiliated with or endorsed by Instagram, Meta, TikTok or ByteDance**
-(see [Limits and honest caveats](#limits-and-honest-caveats)).
-
-**Built with:** Kotlin, Jetpack Compose, Android WebView, plus a small Cloudflare Worker for the AI.
+**Built with:** Kotlin, Jetpack Compose, Android WebView, Claude, Devin, Codex, OpenAI API.
 
 ---
 
