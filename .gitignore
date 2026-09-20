@@ -9,3 +9,9 @@
 .externalNativeBuild
 .cxx
 node_modules
+
+# Local secrets: never commit (the OpenAI key lives here for the test server)
+.dev.vars
+**/.dev.vars
+.env
+**/.env

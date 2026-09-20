@@ -1,0 +1,13 @@
+{
+  "name": "innercircle-insights-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Holds InnerCircle's OpenAI key and turns app requests into AI insights.",
+  "scripts": {
+    "test": "node --test",
+    "dev": "node dev-server.mjs",
+    "dev:real": "USE_REAL_OPENAI=1 node dev-server.mjs",
+    "deploy": "wrangler deploy"
+  }
+}
