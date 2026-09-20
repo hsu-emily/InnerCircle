@@ -9,11 +9,16 @@
  * call  __innerCircle.install({...})  to try things live. Re-running install()/pasting again
  * replaces the previous instance.
  *
- * Config shape (see InstagramSelectors.kt for the source of truth):
- *   hideRules:   [{name, selector, pathPattern?, keepLayoutBox}]   optionally route-scoped
- *   textRules:   [{name, textSelector, texts, hideClosest, keepLayoutBox}]
- *   explore:     {explorePath, searchPath, searchInputSelector, tabSelector}
- *   scrollLocks: [{name, pathPattern?, videoSelector, minScrollRatio, minVideoHeightRatio}]
+ * Config shape (see PlatformSelectors.kt, and the per-platform selector files, for the source of truth):
+ *   hideRules:      [{name, selector, pathPattern?, keepLayoutBox}]   optionally route-scoped
+ *   textRules:      [{name, textSelector, texts, hideClosest, keepLayoutBox}]
+ *   explore:        {explorePath, searchPath, searchInputSelector, tabSelector}
+ *   scrollLocks:    [{name, pathPattern?, videoSelector, minScrollRatio, minVideoHeightRatio}]
+ *   routeRedirects: [{name, fromPattern, to, maxPerSession}]
+ *   slideRules:     [{name, slideSelector, markerSelectors, markerTexts, pathPattern?, videoSelector, label}]
+ *
+ * Everything except hideRules and textRules is optional: a platform that doesn't need a mechanism
+ * leaves it out of its selector file (see PlatformSelectors.kt).
  *
  * keepLayoutBox: hide by collapsing to zero height instead of display:none. Instagram virtualizes
  * the feed and relies on every post keeping a box (its observers never fire for display:none
@@ -25,6 +30,10 @@
   var TAG = '[InnerCircle]';           // FeedCleaner.LOG_PREFIX on the Kotlin side
   var STYLE_ID = '__innercircle_hide_style';
   var RULE_ATTR = 'data-ic-rule';      // marks elements hidden by a text rule
+  var SLIDE_ATTR = 'data-ic-slide';    // marks pager slides covered by a slide rule
+  var SLIDE_COVER_CLASS = '__ic_slide_cover';
+  var REDIRECT_KEY = '__ic_redirect_'; // sessionStorage prefix, one key per redirect rule
+  var REDIRECT_WINDOW_MS = 30000;      // redirects further apart than this start the count over
   var LOCK_GRACE_MS = 1500;            // after locking, tolerate Instagram positioning the pager itself
   var LOCK_SCAN_MS = 250;              // how often to look for a pager while none is locked
   var COVER_ID = '__innercircle_cover';
@@ -187,6 +196,158 @@
       }
     }
     if (!rule.endOfFeed && (!nodes || hiddenNow)) reportCount(rule.name, document.querySelectorAll('[' + RULE_ATTR + '="' + rule.name + '"]').length);
+  }
+
+  // --- Route redirects ---------------------------------------------------------------------------
+  // Send a route we don't want the person on (TikTok's For You feed) to one we do (Following).
+  // location.replace, so Back doesn't land straight back on it.
+  //
+  // The guard matters: if the platform ever answered the redirect by sending us back, the two would
+  // volley forever, reloading the page each time. The count lives in sessionStorage because every
+  // redirect starts a new document, and it starts over once redirects stop coming in bursts.
+  function redirectState(key) {
+    try { return JSON.parse(sessionStorage.getItem(key)) || { n: 0, at: 0 }; } catch (e) { return { n: 0, at: 0 }; }
+  }
+
+  function applyRouteRedirects() {
+    var rules = config.routeRedirects || [];
+    var path = location.pathname;
+    for (var i = 0; i < rules.length; i++) {
+      var rule = rules[i];
+      if (path === rule.to || !matches(rule.fromPattern, path)) continue;
+      var key = REDIRECT_KEY + rule.name;
+      var state = redirectState(key);
+      var now = Date.now();
+      var n = (now - state.at > REDIRECT_WINDOW_MS) ? 0 : state.n;
+      if (n >= rule.maxPerSession) {
+        console.warn(TAG + ' ' + rule.name + ': ' + path + ' kept sending us back after ' + n +
+          ' redirects to ' + rule.to + '; leaving the page alone (does that route still exist?)');
+        continue;
+      }
+      try { sessionStorage.setItem(key, JSON.stringify({ n: n + 1, at: now })); } catch (e) { /* private mode */ }
+      log(rule.name + ': ' + path + ' -> ' + rule.to);
+      location.replace(rule.to);
+      return true;
+    }
+    return false;
+  }
+
+  // --- Slide rules: pager items that can't be hidden ---------------------------------------------
+  // A video in TikTok's feed is a slide in a pager, and both ways of hiding a feed item break it:
+  // display:none takes the slide out of the pager, and collapsing it to zero height leaves the
+  // pager still translating a full viewport height for a 0px slide, i.e. scrolling to blank space
+  // (measured on www.tiktok.com). So the slide keeps its box and its place in the pager, and gets
+  // an opaque cover with its video paused and muted underneath: nothing is seen or heard, the pager
+  // still works, and nothing asks the platform for more items.
+  function hasBox(el) {
+    var r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+
+  // The marker that makes this slide unwanted, or null. Off-screen slides count: they should be
+  // covered before they are swiped to, not once they're showing.
+  function slideMarker(rule, slide) {
+    var i, j, els;
+    // No markers at all: the rule is about the route, not the item, and covers every slide on it.
+    if (!rule.markerSelectors.length && !rule.markerTexts.length) return 'every slide on this route';
+    for (i = 0; i < rule.markerSelectors.length; i++) {
+      els = slide.querySelectorAll(rule.markerSelectors[i]);
+      for (j = 0; j < els.length; j++) if (hasBox(els[j])) return rule.markerSelectors[i];
+    }
+    if (!rule.markerTexts.length) return null;
+    var wanted = rule.markerTexts.map(function (t) { return t.trim().toLowerCase(); });
+    els = slide.querySelectorAll('*'); // any tag: the label isn't always a span
+    for (j = 0; j < els.length; j++) {
+      if (els[j].children.length) continue; // leaf elements only, like the text rules
+      if (wanted.indexOf((els[j].textContent || '').trim().toLowerCase()) >= 0) return els[j].textContent.trim();
+    }
+    return null;
+  }
+
+  function quietVideos(slide, rule) {
+    var videos = slide.querySelectorAll(rule.videoSelector);
+    for (var i = 0; i < videos.length; i++) {
+      var video = videos[i];
+      video.muted = true;
+      try { video.pause(); } catch (e) { /* not ready yet; the listener below catches it */ }
+      if (video.__icQuiet) continue;
+      video.__icQuiet = function () { try { this.pause(); } catch (e) { /* ignore */ } };
+      video.addEventListener('play', video.__icQuiet);
+    }
+  }
+
+  function unquietVideos(slide, rule) {
+    var videos = slide.querySelectorAll(rule.videoSelector);
+    for (var i = 0; i < videos.length; i++) {
+      if (!videos[i].__icQuiet) continue;
+      videos[i].removeEventListener('play', videos[i].__icQuiet);
+      videos[i].__icQuiet = null;
+    }
+  }
+
+  function coverSlide(slide, rule) {
+    if (getComputedStyle(slide).position === 'static') slide.style.setProperty('position', 'relative');
+    var cover = document.createElement('div');
+    cover.className = SLIDE_COVER_CLASS;
+    // Touches still reach the pager underneath (no pointer-events:none, so taps on the item itself
+    // land on the cover and do nothing, but the swipe handlers are on an ancestor and still fire).
+    cover.style.cssText = 'position:absolute;left:0;right:0;top:0;bottom:0;z-index:2147483000;' +
+      'background:#000;color:rgba(255,255,255,0.45);display:flex;align-items:center;' +
+      'justify-content:center;text-align:center;padding:24px;font:14px/1.4 system-ui,sans-serif;' +
+      'white-space:pre-line;';
+    cover.textContent = rule.label || '';
+    slide.appendChild(cover);
+    quietVideos(slide, rule);
+  }
+
+  function uncoverSlide(slide, rule) {
+    slide.removeAttribute(SLIDE_ATTR);
+    var covers = slide.querySelectorAll('.' + SLIDE_COVER_CLASS);
+    for (var i = 0; i < covers.length; i++) covers[i].remove();
+    unquietVideos(slide, rule);
+  }
+
+  function applySlideRules() {
+    var rules = config.slideRules || [];
+    rules.forEach(function (rule) {
+      guard(rule.name, function () {
+        // Off-route: take this rule's covers off rather than leave them behind on the next page.
+        if (rule.pathPattern && !matches(rule.pathPattern, location.pathname)) {
+          releaseSlideRule(rule);
+          return;
+        }
+        var slides = document.querySelectorAll(rule.slideSelector);
+        var covered = 0;
+        for (var i = 0; i < slides.length; i++) {
+          var slide = slides[i];
+          var mine = slide.getAttribute(SLIDE_ATTR) === rule.name;
+          var marker = slideMarker(rule, slide);
+          // Slides are reused as the feed moves on, so a cover comes off again when its marker goes.
+          if (marker && !slide.hasAttribute(SLIDE_ATTR)) {
+            slide.setAttribute(SLIDE_ATTR, rule.name);
+            coverSlide(slide, rule);
+            log(rule.name + ': covered a slide (' + marker + ')');
+            mine = true;
+          } else if (!marker && mine) {
+            uncoverSlide(slide, rule);
+            mine = false;
+          } else if (mine) {
+            quietVideos(slide, rule); // the video element can arrive after the cover
+          }
+          if (mine) covered++;
+        }
+        reportCount(rule.name, covered);
+      });
+    });
+  }
+
+  function releaseSlideRule(rule) {
+    var slides = document.querySelectorAll('[' + SLIDE_ATTR + '="' + rule.name + '"]');
+    for (var i = 0; i < slides.length; i++) uncoverSlide(slides[i], rule);
+  }
+
+  function releaseSlideRules() {
+    (config.slideRules || []).forEach(releaseSlideRule);
   }
 
   function goBackOnce() {
@@ -720,6 +881,9 @@
   // --- Main pass -------------------------------------------------------------------------------
   function applyAll() {
     scheduled = false;
+    // A pass can already be queued when dispose() runs; without this it would undo the teardown
+    // (and on a pager feed that means covers left behind on a page nobody is cleaning any more).
+    if (!config) return;
     try {
       var path = location.pathname;
       if (path !== lastPath) {
@@ -728,6 +892,10 @@
         fullScan = true;
         guard('routeChange', function () { onRouteChange(prev, path); });
       }
+      // Leaving the page anyway: no point hiding anything on it first.
+      var redirected = false;
+      guard('routeRedirects', function () { redirected = applyRouteRedirects(); });
+      if (redirected) return;
       guard('storyAds', applyStoryAds); // first: an ad must be covered before anything else in this pass delays the frame
 
       var active = activeHideRules();
@@ -752,6 +920,7 @@
           guard(rule.name, function () { applyTextRule(rule, nodes); });
         });
       }
+      guard('slideRules', applySlideRules);
       guard('endOfFeed', applyEndOfFeed);
       guard('explore', tryOpenSearch);
       guard('cover', updateCover);
@@ -805,7 +974,8 @@
     }, AD_POLL_MS);
     applyAll();
     log('installed (' + cfg.hideRules.length + ' hide rules, ' + cfg.textRules.length + ' text rules, ' +
-        cfg.scrollLocks.length + ' scroll locks)');
+        (cfg.scrollLocks || []).length + ' scroll locks, ' + (cfg.slideRules || []).length + ' slide rules, ' +
+        (cfg.routeRedirects || []).length + ' route redirects)');
   }
 
   function dispose() {
@@ -815,6 +985,7 @@
     document.removeEventListener('click', onTabClick, true);
     window.removeEventListener('scroll', onEndScroll);
     releaseEndOfFeed();
+    releaseSlideRules();
     hideCover();
     if (adPollTimer) clearInterval(adPollTimer);
     adPollTimer = null;
@@ -833,6 +1004,7 @@
       hidden[i].removeAttribute(RULE_ATTR);
       unhideElement(hidden[i]);
     }
+    config = null; // last: the teardown above reads it
   }
 
   // isStoryAd is for the usage tracker: a story path recognised as an ad isn't a story you viewed.

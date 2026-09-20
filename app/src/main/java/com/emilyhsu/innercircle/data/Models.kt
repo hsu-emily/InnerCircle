@@ -11,7 +11,8 @@ enum class SocialApp(
 ) {
     Instagram("instagram", "Instagram", true, "https://www.instagram.com/"),
     YouTube("youtube", "YouTube", false),
-    TikTok("tiktok", "TikTok", false),
+    // Straight to the Following feed: "/" is the For You algorithm (see TikTokSelectors).
+    TikTok("tiktok", "TikTok", true, "https://www.tiktok.com/following"),
     Facebook("facebook", "Facebook", false),
     LinkedIn("linkedin", "LinkedIn", false);
 

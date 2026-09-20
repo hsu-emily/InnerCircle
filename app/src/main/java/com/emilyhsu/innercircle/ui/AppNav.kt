@@ -66,7 +66,8 @@ import com.emilyhsu.innercircle.ui.stats.StatsViewModel
 import com.emilyhsu.innercircle.ui.survey.SurveyScreen
 import com.emilyhsu.innercircle.ui.survey.SurveyViewModel
 import com.emilyhsu.innercircle.ui.theme.Ic
-import com.emilyhsu.innercircle.webview.InstagramWebView
+import com.emilyhsu.innercircle.webview.CleanedWebView
+import com.emilyhsu.innercircle.webview.selectorsFor
 import kotlinx.coroutines.delay
 
 private object Routes {
@@ -295,9 +296,10 @@ private fun AppWebScreen(app: SocialApp, onLeave: () -> Unit) {
                 ignoreStartsOn = buttonBounds,
             ),
     ) {
-        InstagramWebView(
-            modifier = Modifier.fillMaxSize(),
+        CleanedWebView(
+            selectors = selectorsFor(app) ?: return@BoxWithConstraints,
             startUrl = app.startUrl ?: return@BoxWithConstraints,
+            modifier = Modifier.fillMaxSize(),
             onPageMessage = { tracker.onPageMessage(app, it) },
         )
         if (exitMethod.allowsSwipe && swipeProgress > 0f) {

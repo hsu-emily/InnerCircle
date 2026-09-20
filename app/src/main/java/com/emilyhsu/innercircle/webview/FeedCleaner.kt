@@ -8,7 +8,7 @@ import org.json.JSONObject
 /**
  * Builds the JavaScript string injected into every page: the generic engines from
  * assets/feed_cleaner.js (hiding, search, pager lock) and assets/usage_tracker.js (stats), each
- * with a JSON config generated from [InstagramSelectors].
+ * with a JSON config generated from the platform's [PlatformSelectors].
  */
 object FeedCleaner {
 
@@ -18,7 +18,7 @@ object FeedCleaner {
     private const val ENGINE_ASSET = "feed_cleaner.js"
     private const val TRACKER_ASSET = "usage_tracker.js"
 
-    fun buildScript(context: Context): String {
+    fun buildScript(context: Context, selectors: PlatformSelectors): String {
         // Debug builds also write the story recorder's notes to Logcat (see feed_cleaner.js).
         val debug = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val engine = context.assets.open(ENGINE_ASSET).bufferedReader().use { it.readText() }
@@ -28,8 +28,8 @@ object FeedCleaner {
             // try/catch only covers failures while an engine installs. A JS *syntax* error can't be
             // caught here, but it still reaches Logcat as an "Uncaught" console error. Errors thrown
             // later, from observers, are caught in the engines themselves.
-            appendGuarded(engine, "__innerCircle.install(${configJson(debug)});", "injection failed")
-            appendGuarded(tracker, "__icTracker.install(${trackingJson()});", "tracker injection failed")
+            appendGuarded(engine, "__innerCircle.install(${configJson(selectors, debug)});", "injection failed")
+            appendGuarded(tracker, "__icTracker.install(${trackingJson(selectors)});", "tracker injection failed")
         }
     }
 
@@ -42,20 +42,21 @@ object FeedCleaner {
         append("}\n")
     }
 
-    private fun trackingJson(): String = InstagramSelectors.tracking.let { rule ->
+    internal fun trackingJson(selectors: PlatformSelectors): String = selectors.tracking.let { rule ->
         JSONObject()
             .put("postSelector", rule.postSelector)
             .put("postKeySelector", rule.postKeySelector)
+            .put("postKeyAttr", rule.postKeyAttr)
             .put("minPostHeight", rule.minPostHeight)
             .put("postDwellMs", rule.postDwellMs)
             .put("storyPathPattern", rule.storyPathPattern)
             .toString()
     }
 
-    private fun configJson(debug: Boolean): String = JSONObject().apply {
+    internal fun configJson(selectors: PlatformSelectors, debug: Boolean): String = JSONObject().apply {
         put("debug", debug)
         put("hideRules", JSONArray().apply {
-            InstagramSelectors.hideRules.forEach { rule ->
+            selectors.hideRules.forEach { rule ->
                 put(
                     JSONObject()
                         .put("name", rule.name)
@@ -65,7 +66,7 @@ object FeedCleaner {
                 )
             }
         })
-        InstagramSelectors.explore.let { rule ->
+        selectors.explore?.let { rule ->
             put(
                 "explore",
                 JSONObject()
@@ -76,7 +77,7 @@ object FeedCleaner {
             )
         }
         put("scrollLocks", JSONArray().apply {
-            InstagramSelectors.scrollLocks.forEach { rule ->
+            selectors.scrollLocks.forEach { rule ->
                 put(
                     JSONObject()
                         .put("name", rule.name)
@@ -87,7 +88,7 @@ object FeedCleaner {
                 )
             }
         })
-        InstagramSelectors.storyAds.let { rule ->
+        selectors.storyAds?.let { rule ->
             put(
                 "storyAds",
                 JSONObject()
@@ -98,8 +99,33 @@ object FeedCleaner {
                     .put("nextSelectors", JSONArray(rule.nextSelectors))
             )
         }
+        put("routeRedirects", JSONArray().apply {
+            selectors.routeRedirects.forEach { rule ->
+                put(
+                    JSONObject()
+                        .put("name", rule.name)
+                        .put("fromPattern", rule.fromPattern)
+                        .put("to", rule.to)
+                        .put("maxPerSession", rule.maxPerSession)
+                )
+            }
+        })
+        put("slideRules", JSONArray().apply {
+            selectors.slideRules.forEach { rule ->
+                put(
+                    JSONObject()
+                        .put("name", rule.name)
+                        .put("slideSelector", rule.slideSelector)
+                        .put("markerSelectors", JSONArray(rule.markerSelectors))
+                        .put("markerTexts", JSONArray(rule.markerTexts))
+                        .put("pathPattern", rule.pathPattern ?: JSONObject.NULL)
+                        .put("videoSelector", rule.videoSelector)
+                        .put("label", rule.label)
+                )
+            }
+        })
         put("textRules", JSONArray().apply {
-            InstagramSelectors.textRules.forEach { rule ->
+            selectors.textRules.forEach { rule ->
                 put(
                     JSONObject()
                         .put("name", rule.name)
