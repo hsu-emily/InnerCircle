@@ -46,7 +46,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import com.emilyhsu.innercircle.data.SocialApp
 
 private const val TAG = "InnerCircleWeb"
 private const val JS_TAG = "InnerCircleJS"
@@ -57,22 +56,23 @@ private const val FALLBACK_USER_AGENT =
         "Chrome/130.0.0.0 Mobile Safari/537.36"
 
 /**
- * A supported platform's mobile website in a WebView, with [FeedCleaner] injected on every page load.
+ * A platform's mobile website in a WebView, with [FeedCleaner] injected on every page load using
+ * that platform's [PlatformSelectors] (Instagram and TikTok today).
  *
  * [onPageMessage] receives the JSON usage deltas posted by assets/usage_tracker.js. They arrive
- * through a WebMessageListener limited to that platform's own origins, so other sites and frames can't
- * reach it.
+ * through a WebMessageListener limited to the platform's own origin, so other sites and frames
+ * can't reach it.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun PlatformWebView(
-    app: SocialApp,
+fun CleanedWebView(
+    selectors: PlatformSelectors,
+    startUrl: String,
     modifier: Modifier = Modifier,
-    startUrl: String = "https://www.instagram.com/",
     onPageMessage: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val cleanerScript = remember(app) { FeedCleaner.buildScript(context, app) }
+    val cleanerScript = remember(selectors) { FeedCleaner.buildScript(context, selectors) }
     val latestOnPageMessage by rememberUpdatedState(onPageMessage)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -100,8 +100,8 @@ fun PlatformWebView(
                     settings.userAgentString = mobileChromeUserAgent(ctx)
 
                     webViewClient = CleaningWebViewClient(
-                        app = app,
                         cleanerScript = cleanerScript,
+                        platformName = selectors.displayName,
                         onHistoryChanged = { canGoBack = it.canGoBack() },
                         onLoadError = { loadError = it },
                         onContentVisible = { contentShown = true },
@@ -111,7 +111,7 @@ fun PlatformWebView(
                     // Must be registered before loading so `window.InnerCircleBridge` exists on the first page.
                     if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
                         var lastTapAt = 0L
-                        WebViewCompat.addWebMessageListener(this, "InnerCircleBridge", bridgeOrigins(app)) { view, message, _, isMainFrame, _ ->
+                        WebViewCompat.addWebMessageListener(this, "InnerCircleBridge", selectors.bridgeOrigins) { view, message, _, isMainFrame, _ ->
                             val data = message.data ?: return@addWebMessageListener
                             val tap = parseTapRequest(data)
                             if (tap == null) {
@@ -120,7 +120,7 @@ fun PlatformWebView(
                             }
                             // Taps are only for the story viewer, and never faster than a person could.
                             val now = SystemClock.uptimeMillis()
-                            val inStories = app == SocialApp.Instagram && Uri.parse(view.url).path?.startsWith("/stories/") == true
+                            val inStories = selectors.storyAds != null && Uri.parse(view.url).path?.startsWith("/stories/") == true
                             if (isMainFrame && inStories && now - lastTapAt >= MIN_TAP_GAP_MS) {
                                 lastTapAt = now
                                 view.tap(tap)
@@ -151,22 +151,14 @@ fun PlatformWebView(
 /** What went wrong loading a page, in words a person can act on, plus the raw code for troubleshooting. */
 data class LoadError(val message: String, val technical: String)
 
-/** Maps a WebView error code to a plain-language message. */
-internal fun describeLoadError(errorCode: Int, app: SocialApp = SocialApp.Instagram): String = when (errorCode) {
+/** Maps a WebView error code to a plain-language message about [platformName]. */
+internal fun describeLoadError(errorCode: Int, platformName: String = "Instagram"): String = when (errorCode) {
     WebViewClient.ERROR_HOST_LOOKUP, WebViewClient.ERROR_CONNECT, WebViewClient.ERROR_IO,
     WebViewClient.ERROR_TIMEOUT, WebViewClient.ERROR_PROXY_AUTHENTICATION ->
-        "Can't reach ${app.displayName}. Check your internet connection, then try again."
+        "Can't reach $platformName. Check your internet connection, then try again."
     WebViewClient.ERROR_FAILED_SSL_HANDSHAKE ->
-        "Couldn't make a secure connection to ${app.displayName}. Check your phone's date and time, then try again."
-    else -> "${app.displayName} couldn't load. Try again in a moment."
-}
-
-/** Web pages may only report usage from the platform currently open in this WebView. */
-private fun bridgeOrigins(app: SocialApp): Set<String> = when (app) {
-    SocialApp.Instagram -> setOf("https://www.instagram.com")
-    // YouTube can canonicalize a mobile navigation to www, so accept both first-party origins.
-    SocialApp.YouTube -> setOf("https://m.youtube.com", "https://www.youtube.com")
-    else -> emptySet()
+        "Couldn't make a secure connection to $platformName. Check your phone's date and time, then try again."
+    else -> "$platformName couldn't load. Try again in a moment."
 }
 
 /** Shown from launch until the first page appears. */
@@ -209,8 +201,8 @@ private fun LoadErrorOverlay(error: LoadError, onRetry: () -> Unit) {
 }
 
 private class CleaningWebViewClient(
-    private val app: SocialApp,
     private val cleanerScript: String,
+    private val platformName: String,
     private val onHistoryChanged: (WebView) -> Unit,
     private val onLoadError: (LoadError?) -> Unit,
     private val onContentVisible: () -> Unit,
@@ -246,7 +238,7 @@ private class CleaningWebViewClient(
         if (!request.isForMainFrame) return
         failedThisLoad = true
         Log.e(TAG, "Load error ${error.errorCode} (${error.description}) for ${request.url}")
-        onLoadError(LoadError(describeLoadError(error.errorCode, app), error.description.toString()))
+        onLoadError(LoadError(describeLoadError(error.errorCode, platformName), error.description.toString()))
     }
 }
 

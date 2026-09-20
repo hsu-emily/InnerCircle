@@ -12,39 +12,43 @@ package com.emilyhsu.innercircle.webview
  * is deliberately no unverified ad selector here. Ads are documented as best-effort until a live
  * rendered ad can establish a stable marker.
  */
-object YouTubeSelectors {
+object YouTubeSelectors : PlatformSelectors {
 
-    val config = PlatformSelectorConfig(
-        hideRules = listOf(
-            // The exact rendered mobile nav shape: hiding the renderer removes both the icon and
-            // its hit target instead of leaving an empty Shorts tab behind.
-            HideRule(
-                name = "shortsTab",
-                selector = "ytm-pivot-bar-item-renderer:has([role='tab'].pivot-shorts)",
-            ),
+    override val origin = "https://m.youtube.com"
+    override val displayName = "YouTube"
+
+    // YouTube can canonicalize a mobile navigation to www, so accept both first-party origins.
+    override val bridgeOrigins = setOf("https://m.youtube.com", "https://www.youtube.com")
+
+    override val hideRules: List<HideRule> = listOf(
+        // The exact rendered mobile nav shape: hiding the renderer removes both the icon and
+        // its hit target instead of leaving an empty Shorts tab behind.
+        HideRule(
+            name = "shortsTab",
+            selector = "ytm-pivot-bar-item-renderer:has([role='tab'].pivot-shorts)",
         ),
-        textRules = emptyList(),
-        explore = null,
-        scrollLocks = emptyList(),
-        storyAds = null,
-        routeBlocks = listOf(
-            // A Shorts player uses /shorts/<video-id>. Pause any media already created, then
-            // replace the history entry before YouTube can page to the next Short.
-            RouteBlockRule(
-                name = "shortsPlayer",
-                pathPattern = "^/shorts(?:/|$)",
-                destination = "/feed/subscriptions?app=m&persist_app=1",
-                mediaSelector = "#player-shorts-container video, video",
-            ),
+    )
+
+    override val textRules: List<TextRule> = emptyList()
+
+    // A Shorts player uses /shorts/<video-id>. Pause any media already created, then replace the
+    // history entry before YouTube can page to the next Short.
+    override val routeRedirects: List<RouteRedirect> = listOf(
+        RouteRedirect(
+            name = "shortsPlayer",
+            fromPattern = "^/shorts(?:/|$)",
+            to = "/feed/subscriptions?app=m&persist_app=1",
+            pauseMediaSelector = "#player-shorts-container video, video",
         ),
-        // Native screen time is always recorded; video-card counts are best-effort until a
-        // signed-in subscriptions feed can be rechecked after YouTube changes its renderer.
-        tracking = TrackingRule(
-            postSelector = "ytm-rich-item-renderer, ytm-video-with-context-renderer, ytm-compact-video-renderer",
-            postKeySelector = "a[href^='/watch']",
-            minPostHeight = 120,
-            postDwellMs = 1000,
-            storyPathPattern = null,
-        ),
+    )
+
+    // Native screen time is always recorded; video-card counts are best-effort until a signed-in
+    // subscriptions feed can be rechecked after YouTube changes its renderer.
+    override val tracking = TrackingRule(
+        postSelector = "ytm-rich-item-renderer, ytm-video-with-context-renderer, ytm-compact-video-renderer",
+        postKeySelector = "a[href^='/watch']",
+        minPostHeight = 120,
+        postDwellMs = 1000,
+        storyPathPattern = "", // no story viewer
     )
 }

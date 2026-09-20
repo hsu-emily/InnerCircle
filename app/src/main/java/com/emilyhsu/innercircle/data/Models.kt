@@ -13,7 +13,8 @@ enum class SocialApp(
     // The subscriptions route is intentional: it is the user-chosen alternative to Home's
     // recommendation feed. It asks the person to sign in if they have no YouTube session yet.
     YouTube("youtube", "YouTube", true, "https://m.youtube.com/feed/subscriptions?app=m&persist_app=1"),
-    TikTok("tiktok", "TikTok", false),
+    // Straight to the Following feed: "/" is the For You algorithm (see TikTokSelectors).
+    TikTok("tiktok", "TikTok", true, "https://www.tiktok.com/following"),
     Facebook("facebook", "Facebook", false),
     LinkedIn("linkedin", "LinkedIn", false);
 
