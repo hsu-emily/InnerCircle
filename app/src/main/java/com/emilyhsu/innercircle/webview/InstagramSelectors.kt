@@ -14,7 +14,10 @@ package com.emilyhsu.innercircle.webview
  * Selectors below were checked against the live logged-in mobile site (English, Sept 2026).
  * Anything marked FRAGILE is the first place to look when something stops working.
  */
-object InstagramSelectors {
+object InstagramSelectors : PlatformSelectors {
+
+    override val origin = "https://www.instagram.com"
+    override val displayName = "Instagram"
 
     /**
      * Rules that can be expressed as a plain CSS selector. They're injected as a <style> tag
@@ -23,7 +26,7 @@ object InstagramSelectors {
      * Prefer stable hooks (href, aria-label, role, data-* attributes) over class names. Instagram's
      * classes are generated and change between deploys.
      */
-    val hideRules: List<HideRule> = listOf(
+    override val hideRules: List<HideRule> = listOf(
         // Bottom-nav Reels tab. FRAGILE if it stops working: hiding only the <a> can leave a gap in
         // the tab bar; hide its wrapper instead, e.g. "div:has(> a[href='/reels/'])".
         HideRule(
@@ -66,7 +69,7 @@ object InstagramSelectors {
      *
      * The text is locale-dependent. This assumes the account/browser language is English.
      */
-    val textRules: List<TextRule> = listOf(
+    override val textRules: List<TextRule> = listOf(
         // Backup for adPosts above, in case an ad ever appears without the facebook.com/ads link.
         // The mobile-web label is "Ad" (older/desktop UI says "Sponsored").
         TextRule(
@@ -115,7 +118,7 @@ object InstagramSelectors {
      * which makes Instagram open the search view with your recent searches. Cancel/Back from the
      * search view are sent back to wherever you came from instead of re-opening search.
      */
-    val explore: ExploreRule = ExploreRule(
+    override val explore: ExploreRule = ExploreRule(
         explorePath = EXPLORE_PATH,
         searchPath = "^/explore/search",
         // FRAGILE: the search box on the Explore page.
@@ -135,7 +138,7 @@ object InstagramSelectors {
      * video (see [ScrollLockRule]). FRAGILE: if the lock stops working, check in DevTools that the
      * pager still contains a `<video>` nearly as tall as the pager's visible height.
      */
-    val scrollLocks: List<ScrollLockRule> = listOf(
+    override val scrollLocks: List<ScrollLockRule> = listOf(
         ScrollLockRule(name = "reelPager"),
     )
 
@@ -149,7 +152,7 @@ object InstagramSelectors {
      * ad, inspect it (chrome://inspect) and adjust [StoryAdRule.adLinkSelectors], [StoryAdRule.adTexts]
      * and [StoryAdRule.nextSelectors]. Logcat shows "storyAd: ..." lines when the rule fires or gives up.
      */
-    val storyAds: StoryAdRule = StoryAdRule(
+    override val storyAds: StoryAdRule = StoryAdRule(
         pathPattern = "^/stories/",
         // Feed ads all link out via facebook.com/ads/ig_redirect/...; story ads are expected to do the same.
         adLinkSelectors = listOf("a[href*='/ads/']"),
@@ -166,7 +169,7 @@ object InstagramSelectors {
      * seen in the story route. FRAGILE: if a stat reads 0 while you're clearly using the app, check
      * the story route and that feed posts are still `article` elements.
      */
-    val tracking: TrackingRule = TrackingRule(
+    override val tracking: TrackingRule = TrackingRule(
         postSelector = "article",
         // A permalink inside the post, used so a post scrolled back to isn't counted twice.
         postKeySelector = "a[href^='/p/'], a[href^='/reel/']",
@@ -225,8 +228,10 @@ data class StoryAdRule(
 )
 
 /**
- * See [InstagramSelectors.tracking]. [storyPathPattern] is a JS regex whose first capture group is
- * the story id.
+ * See [InstagramSelectors.tracking]. Posts are told apart by [postKeyAttr] ("href" by default) of
+ * the first [postKeySelector] match inside them, so a post scrolled back to isn't counted twice;
+ * with no match the element itself is the key. [storyPathPattern] is a JS regex whose first capture
+ * group is the story id, or empty on platforms with no story viewer.
  */
 data class TrackingRule(
     val postSelector: String,
@@ -234,6 +239,7 @@ data class TrackingRule(
     val minPostHeight: Int,
     val postDwellMs: Int,
     val storyPathPattern: String,
+    val postKeyAttr: String = "href",
 )
 
 /** See [InstagramSelectors.explore]. Paths are JS regexes tested against `location.pathname`. */

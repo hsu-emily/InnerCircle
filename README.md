@@ -1,12 +1,13 @@
 # InnerCircle
 
-An Android app that lets you use Instagram on your own terms. It opens Instagram's mobile website inside
-the app, removes the parts designed to keep you scrolling (ads, suggested posts, Reels, the endless feed
-after "you're all caught up"), measures how you actually use it, and turns those numbers into a short,
-personal habit summary with an AI.
+An Android app that lets you use Instagram, YouTube and TikTok on your own terms. It opens their mobile
+websites inside the app, removes the parts designed to keep you scrolling where those can be verified (ads,
+suggested posts, Reels, Shorts, the For You feed, the endless feed after "you're all caught up"), measures
+how you actually use them, and turns the combined numbers into a short, personal habit summary with an AI.
 
 It started as a hackathon project. It is a personal tool, not a Play Store product, and it is **not
-affiliated with or endorsed by Instagram or Meta** (see [Limits and honest caveats](#limits-and-honest-caveats)).
+affiliated with or endorsed by Instagram, Meta, TikTok or ByteDance**
+(see [Limits and honest caveats](#limits-and-honest-caveats)).
 
 **Built with:** Kotlin, Jetpack Compose, Android WebView, plus a small Cloudflare Worker for the AI.
 
@@ -20,6 +21,19 @@ affiliated with or endorsed by Instagram or Meta** (see [Limits and honest cavea
 - Locks reels so you only ever see the one you opened. It works in a reel sent in a DM too.
 - Skips story ads automatically.
 - Treats "You're all caught up" as the end of your feed: no suggested posts after it.
+
+**A calmer YouTube**
+- Opens directly to the Subscriptions feed rather than YouTube Home's recommendation feed.
+- Hides the verified mobile Shorts navigation item and immediately exits `/shorts/...` player routes,
+  pausing mounted video before redirecting to Subscriptions.
+- Tracks time alongside Instagram, so Statistics and the AI summary include each platform and the total.
+
+**A TikTok that is only the people you follow**
+- Opens on the **Following** feed, and sends For You, Home and Discover back to it.
+- Ads and suggested videos in the feed are covered in place, and their video is paused and muted.
+- If TikTok refuses to stay on Following (it does when you are logged out), the For You videos are
+  covered rather than played — the rest of the page, including logging in, still works.
+- Hides the who-to-follow cards, the Discover tab and the "Open app" prompts.
 
 **Statistics you can trust**
 - Screen time, time of day, stories viewed, posts seen and scroll distance, for a day, week or month.
@@ -39,7 +53,7 @@ affiliated with or endorsed by Instagram or Meta** (see [Limits and honest cavea
 | --- | --- |
 | **Splash** | Logo and name. |
 | **Survey** (first run only) | Six questions: your goals, typical daily use, when it's hardest to stop, what pulls you in, your daily limit, and anything else in your own words. This is what makes the advice personal. |
-| **Apps** | The platforms. Instagram is live; YouTube, TikTok, Facebook and LinkedIn are shown faded as "coming soon". |
+| **Apps** | The platforms. Instagram, YouTube and TikTok are live; Facebook and LinkedIn are shown faded as "coming soon". |
 | **Statistics** | Day / Week / Month with a date stepper, the numbers above, and the habit summary. |
 | **Settings** | Daily limit, how you leave an app, retake the survey, and how AI insights work. |
 
@@ -55,16 +69,21 @@ affiliated with or endorsed by Instagram or Meta** (see [Limits and honest cavea
 │  WebView ── injected JS ──► UsageTracker┘                        │
 │   │   (feed_cleaner.js + usage_tracker.js)                       │
 │   ▼                                                              │
-│  instagram.com          InsightClient ──► your Worker ──► OpenAI │
+│  instagram.com                                                   │
+│  tiktok.com             InsightClient ──► your Worker ──► OpenAI │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 1. Instagram in a WebView, cleaned as it loads
-`webview/InstagramWebView.kt` shows `instagram.com` and, after every page load, injects two scripts from
-`app/src/main/assets/`. Instagram is a single-page app, so the scripts keep running and react as the feed
-changes. **Every selector lives in one file, `webview/InstagramSelectors.kt`**, so when Instagram changes
-its page, that is the file to edit. The engine itself (`feed_cleaner.js`) has no Instagram-specific
-knowledge.
+### 1. The site in a WebView, cleaned as it loads
+`webview/CleanedWebView.kt` shows the platform's mobile site and, after every page load, injects two
+scripts from `app/src/main/assets/`. Both sites are single-page apps, so the scripts keep running and
+react as the feed changes. **Every selector lives in one file per platform**
+(`webview/InstagramSelectors.kt`, `webview/TikTokSelectors.kt`, both implementing
+`webview/PlatformSelectors.kt`), so when a site changes its page, that is the file to edit. The engine
+itself (`feed_cleaner.js`) knows nothing about either platform: it is handed a JSON config built from the
+selector file.
+
+#### Instagram
 
 | Rule | How it works |
 | --- | --- |
@@ -88,15 +107,55 @@ click, because a scripted click is an "untrusted" event a page can ignore. The p
 origin-restricted message channel, and the app only honours it inside stories, on the right-hand middle of
 the screen, and no faster than one every 0.3 seconds.
 
+#### TikTok
+
+TikTok's problem is not a tab to hide: its default feed **is** the algorithm. Everything below was read
+off the live mobile site under phone emulation (logged out) rather than from memory — TikTok's class names
+are generated hashes (`css-1ssqwx2-…-DivVideoSlideContainer`), so every selector uses a `data-e2e`
+attribute, an `href`, or the shape of the page.
+
+| Rule | How it works |
+| --- | --- |
+| For You / Explore / Discover | Route redirect: the engine replaces the route with `/following`, the one feed made of accounts you chose. Capped per session so it can't volley with the site forever. |
+| The For You feed, when the redirect loses | Every video slide on that route is covered in place (see below). |
+| Feed ads | A slide containing a link out of tiktok.com, a `ads.tiktok.com` / `/business` link, an `ad`-ish `data-e2e`, or a "Sponsored" / "Paid partnership" label. **Best-effort — see the caveats.** |
+| Suggested videos and who-to-follow cards | `[data-e2e='suggest-card']` / `[data-e2e='suggest-accounts']` (verified), plus the "Suggested accounts" wording. |
+| Discover tab, "Open app" button and the app-install interstitial | CSS `display: none`. The header search is left alone, so searching on purpose still works. |
+
+**Blocked videos are covered, not hidden or collapsed.** The feed is a vertical Swiper pager, not a
+scrolling list, so neither of Instagram's answers works. Measured on the live page: applying Instagram's
+zero-height collapse to the first slide left the pager still translating by a full viewport
+(`heights [0, 866]`, `tops [0, 0]`, then `translate: -866` after advancing) — the feed becomes blank
+screens you have to swipe past. Covering the slide instead keeps its box exactly as TikTok laid it out
+(`heights [866, 866]`, `tops [0, 866]` before and after), and a real touch swipe still pages normally.
+The cover is opaque, says why the video is gone, and the slide's `<video>` is paused and muted (with a
+`play` listener that pauses it again, because the pager restarts it on every page change). Nothing is
+removed from the pager and no scroll is blocked, so TikTok never loses track of the feed or refetches it.
+
+#### YouTube
+YouTube's rules are deliberately few: only what was checked on the live mobile site is included.
+
+| Rule | How it works |
+| --- | --- |
+| Start page | Opens on **Subscriptions** (`/feed/subscriptions`) instead of Home's recommendation feed. |
+| Shorts tab | CSS: hides the Shorts item in the mobile bottom bar (`ytm-pivot-bar-item-renderer` containing `.pivot-shorts`). |
+| Shorts player | A route redirect: `/shorts/<id>` is sent back to Subscriptions with `location.replace`, so Back doesn't return to it. Any mounted video is **paused first** and kept paused while the page changes, so a Short can't autoplay or page to the next one. |
+| Loop guard | Shared with TikTok's redirect: after three redirects in a row the engine stops and logs why, rather than reloading forever. |
+| Page bridge | Accepts messages from both `m.youtube.com` and `www.youtube.com`, because YouTube can move between the two. |
+
+No YouTube ad rule is claimed (see the caveats below).
+
 ### 2. Measuring your use
 `tracking/UsageTracker.kt` and `assets/usage_tracker.js`:
 
-- **Time:** counted while an app's screen is in the foreground inside InnerCircle, using the phone's
+- **Time:** counted while a supported app's screen is in the foreground inside InnerCircle, using the phone's
   monotonic clock (so changing the phone's time can't add or remove minutes) and saved every 5 seconds.
-  Wall-clock time only decides which day and hour it belongs to. Time in Instagram *outside* InnerCircle
-  is not counted.
+  Wall-clock time only decides which day and hour it belongs to. Time in Instagram, YouTube or TikTok
+  *outside* InnerCircle is not counted. Every platform's time goes into the same day/week/month totals and
+  the AI prompt.
 - **Posts seen:** a post counts once when it is mostly on screen for at least a second. Hidden ads and
-  suggestions never count.
+  suggestions never count. On TikTok a "post" is a video slide, told apart by its cover image, because the
+  page carries no video id and the pager recycles its slides — it reads low rather than wrong-high.
 - **Stories:** each story opened, taken from the route. Skipped story ads are excluded.
 - **Scroll distance:** page movement converted to metres from the screen's pixel density. It's an
   estimate, typically within about 10%.
@@ -139,7 +198,10 @@ app/src/main/
 │   └── usage_tracker.js       counts posts, stories and scrolling in the page
 └── java/com/emilyhsu/innercircle/
     ├── webview/               WebView, injected scripts' config, native tap
-    │   └── InstagramSelectors.kt   ← every Instagram-specific selector lives here
+    │   ├── PlatformSelectors.kt    ← what a platform has to describe (rule types)
+    │   ├── InstagramSelectors.kt   ← every Instagram-specific selector lives here
+    │   ├── YouTubeSelectors.kt     ← ... every YouTube-specific one here
+    │   └── TikTokSelectors.kt      ← ... and every TikTok-specific one here
     ├── tracking/              UsageTracker (time + page reports)
     ├── data/                  models, repositories, day/week/month maths
     ├── ai/                    prompt, client, endpoint config
@@ -200,20 +262,40 @@ cd server/insights-worker && npm test # Worker: limits, error handling, no key l
 - **No secrets in the app or the repo.** The OpenAI key exists only as a Worker secret (and, for local
   testing, in the git-ignored `.dev.vars`).
 - **Your data stays on your device.** The only thing that leaves is the anonymous summary text above.
-- `allowBackup` is off, because the app stores a logged-in Instagram session and your usage history.
-- The page-to-app message channel accepts messages only from `https://www.instagram.com`.
+- `allowBackup` is off, because the app stores logged-in sessions and your usage history.
+- The page-to-app message channel accepts messages only from the origin of the platform being shown
+  (`https://www.instagram.com` or `https://www.tiktok.com`), never from anything else the page loads.
 - Plain-HTTP traffic is allowed only in debug builds, and only to the emulator's `10.0.2.2` address.
 
 ## Limits and honest caveats
 
-- **Terms of service.** Modifying how Instagram's website behaves may go against Instagram's Terms of Use.
-  This is a personal project; use it at your own risk and don't distribute it as if it were official.
-- **Instagram can break it at any time.** The selectors and the English wording ("Ad", "Suggested for you",
-  "You're all caught up") are the fragile parts. Everything is in `InstagramSelectors.kt`.
+- **Terms of service.** Modifying how Instagram's or TikTok's website behaves may go against their Terms of
+  Use. This is a personal project; use it at your own risk and don't distribute it as if it were official.
+- **Either site can break it at any time.** The selectors and the English wording ("Ad", "Suggested for
+  you", "You're all caught up", "Suggested accounts") are the fragile parts. Everything is in
+  `InstagramSelectors.kt` and `TikTokSelectors.kt`.
 - **Story-ad detection is best-effort.** It is tested against a simulated story viewer and Instagram's known
   ad markers, not against a large sample of real ads. Debug builds write what it detected to Logcat (tag
   `InnerCircleJS`), which makes a miss easy to diagnose.
-- **Only Instagram works today.** The other platforms are placeholders.
+- **YouTube ad blocking is not claimed yet.** The live mobile session used to add this support was
+  signed out and served no homepage, search, in-feed or pre-roll ad. No selector was guessed from old
+  markup. Shorts and the Subscriptions default are working; video-card counts are best-effort until a
+  signed-in subscriptions feed and a live ad can be re-inspected. Facebook and LinkedIn remain
+  placeholders.
+- **TikTok's ad and suggested-video rules are unproven.** TikTok's logged-out mobile web serves two videos
+  and then an app-install wall, and no TikTok account was available, so no real ad and no real suggested
+  slide could be loaded to read its markup. The markers are reasoned from TikTok's own web UI and its
+  labels, and they were tested by planting those markers in the live page (the right slide gets covered,
+  the cover goes away when the marker does). Treat a sponsored video getting through as expected, and
+  re-inspect: debug builds log `[InnerCircle] <rule>: N matches` to Logcat (tag `InnerCircleJS`).
+- **TikTok logged out is a degraded experience by design.** TikTok answers `/following` by sending you
+  back to `/foryou`, so after three rounds the redirect stops and the For You videos are covered instead —
+  a wall of "log in to see the people you follow" cards. Logged in, the Following feed should simply load;
+  that path could not be tested.
+- **Whether TikTok virtualizes its feed is unknown.** The logged-out pager reported `virtual: false` with
+  two slides. The cover keeps every slide's box intact, so it is safe either way, but a long logged-in
+  session has not been observed.
+- **Facebook and LinkedIn are still placeholders.**
 - **English only** for the text-based rules.
 - **Not hardened for a public release.** Anyone can invent an install id, so the Worker's per-IP and global
   limits are the real ceiling. A public release should add Play Integrity or Firebase App Check.

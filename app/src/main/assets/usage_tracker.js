@@ -3,7 +3,7 @@
  *
  * Runs inside the page next to feed_cleaner.js and reports what the user actually did, as small
  * deltas, to the app through `window.InnerCircleBridge` (an origin-restricted WebMessageListener
- * registered in InstagramWebView.kt). Time on app is measured natively; this covers the parts only
+ * registered in CleanedWebView.kt). Time on app is measured natively; this covers the parts only
  * the page knows:
  *
  *   posts    - feed posts that were mostly on screen for a moment (hidden ads/suggested posts are
@@ -11,8 +11,9 @@
  *   stories  - distinct stories opened, taken from the route (/stories/<user>/<id>/)
  *   scrollPx - vertical distance the feed was scrolled, in CSS px
  *
- * Config (see InstagramSelectors.kt): {postSelector, postKeySelector, minPostHeight, postDwellMs,
- * storyPathPattern}. Like feed_cleaner.js it can be pasted into the chrome://inspect console.
+ * Config (see PlatformSelectors.kt): {postSelector, postKeySelector, postKeyAttr, minPostHeight,
+ * postDwellMs, storyPathPattern}. Like feed_cleaner.js it can be pasted into the chrome://inspect
+ * console. storyPathPattern is empty on platforms with no story viewer.
  */
 (function () {
   'use strict';
@@ -60,9 +61,11 @@
   }
 
   // --- posts ---------------------------------------------------------------------------------------
+  // Posts are told apart by an attribute of something inside them: Instagram has a permalink,
+  // TikTok has no id anywhere in the DOM and uses the video's cover image instead.
   function postKey(el) {
     var a = cfg.postKeySelector ? el.querySelector(cfg.postKeySelector) : null;
-    return a ? a.getAttribute('href') : null;
+    return a ? a.getAttribute(cfg.postKeyAttr || 'href') : null;
   }
 
   function stillInView(el) {

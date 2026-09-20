@@ -46,19 +46,24 @@ fun AppsScreen(onOpenApp: (SocialApp) -> Unit) {
         Text("Disconnect from the noise.", style = MaterialTheme.typography.headlineMedium, color = Ic.Ink)
         Spacer(Modifier.height(32.dp))
 
-        // Live platform(s): a full-width row.
-        SocialApp.entries.filter { it.enabled }.forEach { app ->
-            AppCell(app, Modifier.fillMaxWidth(), onClick = { onOpenApp(app) })
-        }
-
-        // Everything else is shown, greyed out, two to a row.
-        SocialApp.entries.filter { !it.enabled }.chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                row.forEach { app -> AppCell(app, Modifier.weight(1f), onClick = null) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
+        // Live platforms first, then the ones that aren't built yet (faded). Both are laid out the same
+        // way: two to a row, and an odd one out sits alone in its own row.
+        AppGrid(SocialApp.entries.filter { it.enabled }, onOpenApp)
+        AppGrid(SocialApp.entries.filter { !it.enabled }, onOpenApp = null)
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** [apps] two to a row; a lone last app takes the left cell of its own row. Not tappable without [onOpenApp]. */
+@Composable
+private fun AppGrid(apps: List<SocialApp>, onOpenApp: ((SocialApp) -> Unit)?) {
+    apps.chunked(2).forEach { row ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            row.forEach { app ->
+                AppCell(app, Modifier.weight(1f), onClick = onOpenApp?.let { open -> { open(app) } })
+            }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
     }
 }
 
