@@ -1,0 +1,16 @@
+name = "innercircle-insights"
+main = "src/worker.js"
+compatibility_date = "2026-01-01"
+
+# Which OpenAI model to use. Change it here without touching the app.
+[vars]
+OPENAI_MODEL = "gpt-4o-mini"
+
+# Daily usage counters. Create it once with:  npx wrangler kv namespace create LIMITS
+# then paste the id it prints below.
+[[kv_namespaces]]
+binding = "LIMITS"
+id = "PASTE_THE_KV_NAMESPACE_ID_HERE"
+
+# The OpenAI key is NOT here. Store it as a secret so it never appears in a file or in git:
+#   npx wrangler secret put OPENAI_API_KEY

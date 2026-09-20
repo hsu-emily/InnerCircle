@@ -3,10 +3,18 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Open ring, left open at the bottom. -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,54m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0" />
+        android:pathData="M44.61,69.66 A20,20 0 1 1 63.39,69.66"
+        android:strokeColor="#141414"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <!-- Head. -->
     <path
-        android:fillColor="#6650A4"
-        android:pathData="M54,54m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+        android:fillColor="#141414"
+        android:pathData="M54,53.5m-7,0a7,7 0 1,1 14,0a7,7 0 1,1 -14,0" />
+    <!-- Body, the stem of the keyhole. -->
+    <path
+        android:fillColor="#141414"
+        android:pathData="M50.5,59 L57.5,59 L60.5,71 L47.5,71 Z" />
 </vector>

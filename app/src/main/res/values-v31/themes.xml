@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.InnerCircle" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFF9F6F1</item>
+        <!-- The system launch splash uses the same grey as the in-app splash, so the hand-off is seamless. -->
+        <item name="android:windowSplashScreenBackground">#FFC2BFBB</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#FFF6F1E7</item>
+    </style>
+</resources>
