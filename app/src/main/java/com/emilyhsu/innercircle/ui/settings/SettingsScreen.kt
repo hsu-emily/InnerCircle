@@ -95,7 +95,7 @@ fun SettingsScreen(container: AppContainer, onRetakeSurvey: () -> Unit) {
 
         Group("Leaving an app") {
             Text(
-                "How do you get back to InnerCircle from Instagram? The Android Back gesture always works too.",
+                "How do you get back to InnerCircle from a social app? The Android Back gesture always works too.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Ic.Muted,
             )

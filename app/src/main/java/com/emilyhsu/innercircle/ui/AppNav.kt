@@ -66,7 +66,7 @@ import com.emilyhsu.innercircle.ui.stats.StatsViewModel
 import com.emilyhsu.innercircle.ui.survey.SurveyScreen
 import com.emilyhsu.innercircle.ui.survey.SurveyViewModel
 import com.emilyhsu.innercircle.ui.theme.Ic
-import com.emilyhsu.innercircle.webview.InstagramWebView
+import com.emilyhsu.innercircle.webview.PlatformWebView
 import kotlinx.coroutines.delay
 
 private object Routes {
@@ -295,7 +295,8 @@ private fun AppWebScreen(app: SocialApp, onLeave: () -> Unit) {
                 ignoreStartsOn = buttonBounds,
             ),
     ) {
-        InstagramWebView(
+        PlatformWebView(
+            app = app,
             modifier = Modifier.fillMaxSize(),
             startUrl = app.startUrl ?: return@BoxWithConstraints,
             onPageMessage = { tracker.onPageMessage(app, it) },

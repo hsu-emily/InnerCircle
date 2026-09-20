@@ -55,6 +55,22 @@ class InsightPromptTest {
         assertTrue("scroll distance", "of scrolling" in text)
     }
 
+    @Test fun promptIncludesCombinedInstagramAndYouTubeUsage() {
+        val date = LocalDate.of(2026, 9, 19)
+        val instagram = AppDay(totalMs = 30 * 60_000L, posts = 4)
+        val youtube = AppDay(totalMs = 45 * 60_000L, posts = 7, scrollPx = 3_200.0)
+        val summary = PeriodSummary(
+            period = Period.Day, start = date, end = date,
+            total = instagram + youtube, previousTotalMs = 0,
+            perApp = mapOf(SocialApp.Instagram to instagram, SocialApp.YouTube to youtube),
+            daily = listOf(date to (instagram.totalMs + youtube.totalMs)),
+        )
+        val text = InsightPrompt.user(profile, summary)
+        assertTrue("combined total", "Total time: 1h 15m" in text)
+        assertTrue("Instagram breakdown", "Instagram: 30m" in text)
+        assertTrue("YouTube breakdown", "YouTube: 45m" in text)
+    }
+
     @Test fun emptyPeriodSaysSoInsteadOfInventingData() {
         val empty = PeriodSummary(Period.Day, LocalDate.of(2026, 9, 19), LocalDate.of(2026, 9, 19), AppDay(), 0, emptyMap(), listOf(LocalDate.of(2026, 9, 19) to 0L))
         val text = InsightPrompt.user(profile, empty)

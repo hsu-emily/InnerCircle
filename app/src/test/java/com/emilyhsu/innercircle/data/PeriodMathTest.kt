@@ -84,6 +84,19 @@ class PeriodMathTest {
         assertEquals(20 * 60_000L, s.previousTotalMs)                   // only the first four days of last week
     }
 
+    @Test fun aggregationKeepsYouTubeSeparateAndIncludesItInTheCombinedTotal() {
+        val date = LocalDate.of(2026, 9, 16)
+        val data: UsageDays = mapOf(date.toString() to mapOf(
+            "instagram" to AppDay(totalMs = 20 * 60_000L),
+            "youtube" to AppDay(totalMs = 35 * 60_000L, posts = 3),
+        ))
+        val summary = summarizeUsage(data, Period.Day, date, date, sun)
+        assertEquals(55 * 60_000L, summary.total.totalMs)
+        assertEquals(20 * 60_000L, summary.perApp[SocialApp.Instagram]?.totalMs)
+        assertEquals(35 * 60_000L, summary.perApp[SocialApp.YouTube]?.totalMs)
+        assertEquals(3, summary.perApp[SocialApp.YouTube]?.posts)
+    }
+
     @Test fun pastWindowsAreCompleteAndNotCurrent() {
         val data = usage(LocalDate.of(2026, 9, 8) to 30)
         val s = summarizeUsage(data, Period.Week, LocalDate.of(2026, 9, 8), sat, sun)

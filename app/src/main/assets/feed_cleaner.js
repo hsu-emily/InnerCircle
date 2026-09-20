@@ -14,6 +14,7 @@
  *   textRules:   [{name, textSelector, texts, hideClosest, keepLayoutBox}]
  *   explore:     {explorePath, searchPath, searchInputSelector, tabSelector}
  *   scrollLocks: [{name, pathPattern?, videoSelector, minScrollRatio, minVideoHeightRatio}]
+ *   routeBlocks: [{name, pathPattern, destination, mediaSelector}]
  *
  * keepLayoutBox: hide by collapsing to zero height instead of display:none. Instagram virtualizes
  * the feed and relies on every post keeping a box (its observers never fire for display:none
@@ -59,6 +60,10 @@
   var scheduled = false;
   var lastCounts = {};   // rule name -> last logged match count (only log on change)
   var failedRules = {};  // rule name -> true once its error was logged (avoid per-frame spam)
+
+  // A route block is used for a page whose entire interaction model is endless paging (currently
+  // YouTube Shorts). Remembering the path makes a slow navigation idempotent while mutations land.
+  var blockingPath = null;
 
   // Route state for the explore -> search behavior.
   var lastPath = null;
@@ -112,6 +117,32 @@
     if (lastCounts[ruleName] === count) return;
     lastCounts[ruleName] = count;
     log(ruleName + ': ' + count + ' matches' + (count === 0 ? ' (selector stale? re-inspect the DOM)' : ''));
+  }
+
+  // --- Route blocks: escape endless full-screen players -----------------------------------------
+  // Pausing is deliberately first: a player can be mounted before navigation settles. `replace`
+  // means Android Back won't return to the Short and restart its pager.
+  function applyRouteBlocks() {
+    var blocks = config.routeBlocks || [];
+    var path = location.pathname;
+    for (var i = 0; i < blocks.length; i++) {
+      var rule = blocks[i];
+      if (!matches(rule.pathPattern, path)) continue;
+      var media = document.querySelectorAll(rule.mediaSelector || 'video');
+      for (var j = 0; j < media.length; j++) {
+        media[j].autoplay = false;
+        media[j].removeAttribute('autoplay');
+        try { media[j].pause(); } catch (e) { /* a not-yet-ready media element is harmless */ }
+      }
+      if (blockingPath !== path) {
+        blockingPath = path;
+        log(rule.name + ': paused ' + media.length + ' media element(s); leaving blocked route');
+        location.replace(rule.destination);
+      }
+      return true;
+    }
+    blockingPath = null;
+    return false;
   }
 
   // --- Hide rules: pure CSS -------------------------------------------------------------------
@@ -728,6 +759,9 @@
         fullScan = true;
         guard('routeChange', function () { onRouteChange(prev, path); });
       }
+      // Do this before any scan or observer work. It keeps a Shorts player from autoplaying or
+      // receiving a paging gesture while the subscriptions route is loading.
+      if (applyRouteBlocks()) return;
       guard('storyAds', applyStoryAds); // first: an ad must be covered before anything else in this pass delays the frame
 
       var active = activeHideRules();
@@ -798,8 +832,11 @@
     window.addEventListener('scroll', onEndScroll, { passive: true });
     // Instagram updates a story's name and labels by editing text in place, which the observer above
     // (adds/removes only) never sees, so while a story is open it's checked on a timer as well.
+    // The same tick also notices a SPA route update which did not happen to add DOM nodes: that
+    // matters for a blocked Shorts route, where even a short delay would allow autoplay.
     adPollTimer = setInterval(function () {
       guard('storyAds', applyStoryAds);
+      if (config.routeBlocks && config.routeBlocks.length) schedule();
       // The safety-net scan must not wait for some other change to come along and trigger a pass.
       if (Date.now() - lastFullScan >= FULL_SCAN_MS) { fullScan = true; schedule(); }
     }, AD_POLL_MS);

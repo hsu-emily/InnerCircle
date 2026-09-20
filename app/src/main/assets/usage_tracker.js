@@ -3,7 +3,7 @@
  *
  * Runs inside the page next to feed_cleaner.js and reports what the user actually did, as small
  * deltas, to the app through `window.InnerCircleBridge` (an origin-restricted WebMessageListener
- * registered in InstagramWebView.kt). Time on app is measured natively; this covers the parts only
+ * registered in PlatformWebView). Time on app is measured natively; this covers the parts only
  * the page knows:
  *
  *   posts    - feed posts that were mostly on screen for a moment (hidden ads/suggested posts are
@@ -11,7 +11,7 @@
  *   stories  - distinct stories opened, taken from the route (/stories/<user>/<id>/)
  *   scrollPx - vertical distance the feed was scrolled, in CSS px
  *
- * Config (see InstagramSelectors.kt): {postSelector, postKeySelector, minPostHeight, postDwellMs,
+ * Config (see the platform's selector file): {postSelector, postKeySelector, minPostHeight, postDwellMs,
  * storyPathPattern}. Like feed_cleaner.js it can be pasted into the chrome://inspect console.
  */
 (function () {

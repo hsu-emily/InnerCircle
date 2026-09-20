@@ -37,7 +37,7 @@ import kotlinx.coroutines.delay
 
 private const val OPENING_MS = 1300
 
-/** The "InnerCircle → Instagram" hand-off shown for a moment before the app's WebView appears. */
+/** The "InnerCircle → platform" hand-off shown for a moment before the app's WebView appears. */
 @Composable
 fun OpeningScreen(app: SocialApp, onReady: () -> Unit) {
     val ready by rememberUpdatedState(onReady)

@@ -10,7 +10,9 @@ enum class SocialApp(
     val startUrl: String? = null,
 ) {
     Instagram("instagram", "Instagram", true, "https://www.instagram.com/"),
-    YouTube("youtube", "YouTube", false),
+    // The subscriptions route is intentional: it is the user-chosen alternative to Home's
+    // recommendation feed. It asks the person to sign in if they have no YouTube session yet.
+    YouTube("youtube", "YouTube", true, "https://m.youtube.com/feed/subscriptions?app=m&persist_app=1"),
     TikTok("tiktok", "TikTok", false),
     Facebook("facebook", "Facebook", false),
     LinkedIn("linkedin", "LinkedIn", false);

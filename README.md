@@ -1,9 +1,8 @@
 # InnerCircle
 
-An Android app that lets you use Instagram on your own terms. It opens Instagram's mobile website inside
-the app, removes the parts designed to keep you scrolling (ads, suggested posts, Reels, the endless feed
-after "you're all caught up"), measures how you actually use it, and turns those numbers into a short,
-personal habit summary with an AI.
+An Android app that lets you use Instagram and YouTube on your own terms. It opens their mobile websites
+inside the app, removes the parts designed to keep you scrolling where those can be verified, measures how
+you actually use them, and turns the combined numbers into a short, personal habit summary with an AI.
 
 It started as a hackathon project. It is a personal tool, not a Play Store product, and it is **not
 affiliated with or endorsed by Instagram or Meta** (see [Limits and honest caveats](#limits-and-honest-caveats)).
@@ -20,6 +19,12 @@ affiliated with or endorsed by Instagram or Meta** (see [Limits and honest cavea
 - Locks reels so you only ever see the one you opened. It works in a reel sent in a DM too.
 - Skips story ads automatically.
 - Treats "You're all caught up" as the end of your feed: no suggested posts after it.
+
+**A calmer YouTube**
+- Opens directly to the Subscriptions feed rather than YouTube Home's recommendation feed.
+- Hides the verified mobile Shorts navigation item and immediately exits `/shorts/...` player routes,
+  pausing mounted video before redirecting to Subscriptions.
+- Tracks time alongside Instagram, so Statistics and the AI summary include each platform and the total.
 
 **Statistics you can trust**
 - Screen time, time of day, stories viewed, posts seen and scroll distance, for a day, week or month.
@@ -39,7 +44,7 @@ affiliated with or endorsed by Instagram or Meta** (see [Limits and honest cavea
 | --- | --- |
 | **Splash** | Logo and name. |
 | **Survey** (first run only) | Six questions: your goals, typical daily use, when it's hardest to stop, what pulls you in, your daily limit, and anything else in your own words. This is what makes the advice personal. |
-| **Apps** | The platforms. Instagram is live; YouTube, TikTok, Facebook and LinkedIn are shown faded as "coming soon". |
+| **Apps** | Instagram and YouTube are live; TikTok, Facebook and LinkedIn are shown faded as "coming soon". |
 | **Statistics** | Day / Week / Month with a date stepper, the numbers above, and the habit summary. |
 | **Settings** | Daily limit, how you leave an app, retake the survey, and how AI insights work. |
 
@@ -59,12 +64,11 @@ affiliated with or endorsed by Instagram or Meta** (see [Limits and honest cavea
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 1. Instagram in a WebView, cleaned as it loads
-`webview/InstagramWebView.kt` shows `instagram.com` and, after every page load, injects two scripts from
-`app/src/main/assets/`. Instagram is a single-page app, so the scripts keep running and react as the feed
-changes. **Every selector lives in one file, `webview/InstagramSelectors.kt`**, so when Instagram changes
-its page, that is the file to edit. The engine itself (`feed_cleaner.js`) has no Instagram-specific
-knowledge.
+### 1. Instagram and YouTube in a WebView, cleaned as they load
+`webview/InstagramWebView.kt` hosts either supported mobile site and, after every page load, injects two
+scripts from `app/src/main/assets/`. Both sites are single-page apps, so the scripts keep running and react
+as the feed changes. **Every platform selector lives in its own file** (`webview/InstagramSelectors.kt` or
+`webview/YouTubeSelectors.kt`); the engine itself (`feed_cleaner.js`) has no platform-specific knowledge.
 
 | Rule | How it works |
 | --- | --- |
@@ -91,10 +95,10 @@ the screen, and no faster than one every 0.3 seconds.
 ### 2. Measuring your use
 `tracking/UsageTracker.kt` and `assets/usage_tracker.js`:
 
-- **Time:** counted while an app's screen is in the foreground inside InnerCircle, using the phone's
+- **Time:** counted while a supported app's screen is in the foreground inside InnerCircle, using the phone's
   monotonic clock (so changing the phone's time can't add or remove minutes) and saved every 5 seconds.
   Wall-clock time only decides which day and hour it belongs to. Time in Instagram *outside* InnerCircle
-  is not counted.
+  is not counted. YouTube time is included in the same day/week/month totals and the AI prompt.
 - **Posts seen:** a post counts once when it is mostly on screen for at least a second. Hidden ads and
   suggestions never count.
 - **Stories:** each story opened, taken from the route. Skipped story ads are excluded.
@@ -139,7 +143,8 @@ app/src/main/
 │   └── usage_tracker.js       counts posts, stories and scrolling in the page
 └── java/com/emilyhsu/innercircle/
     ├── webview/               WebView, injected scripts' config, native tap
-    │   └── InstagramSelectors.kt   ← every Instagram-specific selector lives here
+    │   ├── InstagramSelectors.kt   ← every Instagram-specific selector lives here
+    │   └── YouTubeSelectors.kt     ← every YouTube-specific selector lives here
     ├── tracking/              UsageTracker (time + page reports)
     ├── data/                  models, repositories, day/week/month maths
     ├── ai/                    prompt, client, endpoint config
@@ -213,7 +218,11 @@ cd server/insights-worker && npm test # Worker: limits, error handling, no key l
 - **Story-ad detection is best-effort.** It is tested against a simulated story viewer and Instagram's known
   ad markers, not against a large sample of real ads. Debug builds write what it detected to Logcat (tag
   `InnerCircleJS`), which makes a miss easy to diagnose.
-- **Only Instagram works today.** The other platforms are placeholders.
+- **YouTube ad blocking is not claimed yet.** The live mobile session used to add this support was
+  signed out and served no homepage, search, in-feed or pre-roll ad. No selector was guessed from old
+  markup. Shorts and the Subscriptions default are working; video-card counts are best-effort until a
+  signed-in subscriptions feed and a live ad can be re-inspected. TikTok, Facebook and LinkedIn remain
+  placeholders.
 - **English only** for the text-based rules.
 - **Not hardened for a public release.** Anyone can invent an install id, so the Worker's per-IP and global
   limits are the real ceiling. A public release should add Play Integrity or Firebase App Check.

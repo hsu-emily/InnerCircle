@@ -16,6 +16,9 @@ package com.emilyhsu.innercircle.webview
  */
 object InstagramSelectors {
 
+    val config: PlatformSelectorConfig
+        get() = PlatformSelectorConfig(hideRules, textRules, explore, scrollLocks, storyAds, tracking)
+
     /**
      * Rules that can be expressed as a plain CSS selector. They're injected as a <style> tag
      * (`display: none !important`), so newly loaded content is hidden before it ever paints.
@@ -233,7 +236,27 @@ data class TrackingRule(
     val postKeySelector: String,
     val minPostHeight: Int,
     val postDwellMs: Int,
-    val storyPathPattern: String,
+    val storyPathPattern: String?,
+)
+
+/** A route which must never remain visible, such as a full-screen endless-video player. */
+data class RouteBlockRule(
+    val name: String,
+    val pathPattern: String,
+    val destination: String,
+    /** Any media already mounted is paused before navigation begins. */
+    val mediaSelector: String = "video",
+)
+
+/** Platform-owned rules consumed by the shared page cleaner and tracker. */
+data class PlatformSelectorConfig(
+    val hideRules: List<HideRule>,
+    val textRules: List<TextRule>,
+    val explore: ExploreRule?,
+    val scrollLocks: List<ScrollLockRule>,
+    val storyAds: StoryAdRule?,
+    val tracking: TrackingRule,
+    val routeBlocks: List<RouteBlockRule> = emptyList(),
 )
 
 /** See [InstagramSelectors.explore]. Paths are JS regexes tested against `location.pathname`. */
