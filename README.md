@@ -267,39 +267,6 @@ cd server/insights-worker && npm test # Worker: limits, error handling, no key l
   (`https://www.instagram.com` or `https://www.tiktok.com`), never from anything else the page loads.
 - Plain-HTTP traffic is allowed only in debug builds, and only to the emulator's `10.0.2.2` address.
 
-## Limits and honest caveats
-
-- **Terms of service.** Modifying how Instagram's or TikTok's website behaves may go against their Terms of
-  Use. This is a personal project; use it at your own risk and don't distribute it as if it were official.
-- **Either site can break it at any time.** The selectors and the English wording ("Ad", "Suggested for
-  you", "You're all caught up", "Suggested accounts") are the fragile parts. Everything is in
-  `InstagramSelectors.kt` and `TikTokSelectors.kt`.
-- **Story-ad detection is best-effort.** It is tested against a simulated story viewer and Instagram's known
-  ad markers, not against a large sample of real ads. Debug builds write what it detected to Logcat (tag
-  `InnerCircleJS`), which makes a miss easy to diagnose.
-- **YouTube ad blocking is not claimed yet.** The live mobile session used to add this support was
-  signed out and served no homepage, search, in-feed or pre-roll ad. No selector was guessed from old
-  markup. Shorts and the Subscriptions default are working; video-card counts are best-effort until a
-  signed-in subscriptions feed and a live ad can be re-inspected. Facebook and LinkedIn remain
-  placeholders.
-- **TikTok's ad and suggested-video rules are unproven.** TikTok's logged-out mobile web serves two videos
-  and then an app-install wall, and no TikTok account was available, so no real ad and no real suggested
-  slide could be loaded to read its markup. The markers are reasoned from TikTok's own web UI and its
-  labels, and they were tested by planting those markers in the live page (the right slide gets covered,
-  the cover goes away when the marker does). Treat a sponsored video getting through as expected, and
-  re-inspect: debug builds log `[InnerCircle] <rule>: N matches` to Logcat (tag `InnerCircleJS`).
-- **TikTok logged out is a degraded experience by design.** TikTok answers `/following` by sending you
-  back to `/foryou`, so after three rounds the redirect stops and the For You videos are covered instead —
-  a wall of "log in to see the people you follow" cards. Logged in, the Following feed should simply load;
-  that path could not be tested.
-- **Whether TikTok virtualizes its feed is unknown.** The logged-out pager reported `virtual: false` with
-  two slides. The cover keeps every slide's box intact, so it is safe either way, but a long logged-in
-  session has not been observed.
-- **Facebook and LinkedIn are still placeholders.**
-- **English only** for the text-based rules.
-- **Not hardened for a public release.** Anyone can invent an install id, so the Worker's per-IP and global
-  limits are the real ceiling. A public release should add Play Integrity or Firebase App Check.
-- **Emulators are slow at Instagram.** The page is heavy; a real phone will feel noticeably snappier.
 
 ## Credits
 
