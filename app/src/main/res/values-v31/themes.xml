@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.InnerCircle" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">#FFF9F6F1</item>
-        <!-- The system launch splash uses the same grey as the in-app splash, so the hand-off is seamless. -->
+        <item name="android:windowBackground">#FFC2BFBB</item>
+        <!-- The system launch splash uses the same grey as the in-app splash, and an empty icon (see
+             splash_icon_empty.xml), so the logo and the name appear together when the app's splash draws. -->
         <item name="android:windowSplashScreenBackground">#FFC2BFBB</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">#FFF6F1E7</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_empty</item>
     </style>
 </resources>

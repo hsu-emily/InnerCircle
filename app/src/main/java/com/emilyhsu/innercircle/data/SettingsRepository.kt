@@ -73,10 +73,6 @@ class SettingsRepository(context: Context) {
         prefs.edit().putString(insightKey(insight.period, start), o.toString()).apply()
     }
 
-    fun clearInsights() {
-        prefs.edit().apply { prefs.all.keys.filter { it.startsWith("insight_") }.forEach { remove(it) } }.apply()
-    }
-
     /** One saved insight per window, so paging back to last week shows last week's, not this week's. */
     private fun insightKey(period: Period, start: LocalDate) = "insight_${period.name}_$start"
 

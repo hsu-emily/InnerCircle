@@ -4,13 +4,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -73,7 +71,7 @@ fun IcProgressBar(progress: Float, modifier: Modifier = Modifier) {
     }
 }
 
-/** A selectable row used by the survey: outlined when off, filled ink when on. */
+/** A selectable row used by the survey and Settings: outlined when off, filled dark ink when on. */
 @Composable
 fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(16.dp)
@@ -86,7 +84,6 @@ fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit, modifier: M
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             label,
@@ -95,8 +92,5 @@ fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit, modifier: M
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             modifier = Modifier.weight(1f),
         )
-        if (selected) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(Ic.Background))
-        }
     }
 }

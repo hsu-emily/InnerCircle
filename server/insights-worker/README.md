@@ -62,7 +62,7 @@ builds allow plain HTTP to that address only; release builds require HTTPS. Phys
 10.0.2.2, so they need the deployed Worker.
 
 `npm run dev:real` talks to OpenAI for real, using the key in `.dev.vars` (see below). Keep that terminal
-open while you use the app; if it isn't running, Stats says it couldn't reach the insights service.
+open while you use the app; if it isn't running, Statistics says it couldn't reach the insights service.
 
 ### What `.dev.vars` is for
 
